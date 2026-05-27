@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TechStore — UML Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:       #0b0c10;
+    --surface:  #13151c;
+    --border:   #1e2130;
+    --accent:   #5ef6b0;
+    --accent2:  #7b6ef6;
+    --accent3:  #f6c05e;
+    --danger:   #f65e7b;
+    --text:     #e2e8f8;
+    --muted:    #6b7394;
+    --radius:   12px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── Noise overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: .35;
+  }
+
+  .page { position: relative; z-index: 1; }
+
+  /* ── Top bar ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.25rem 2.5rem;
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(11,12,16,.85);
+  }
+
+  .logo {
+    font-size: 1.4rem; font-weight: 800; letter-spacing: -.03em;
+    background: linear-gradient(120deg, var(--accent) 0%, var(--accent2) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  .badge {
+    font-size: .7rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    padding: .25rem .7rem; border-radius: 99px;
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+
+  nav { display: flex; gap: .25rem; }
+  nav a {
+    font-size: .82rem; font-weight: 600; text-decoration: none; color: var(--muted);
+    padding: .45rem 1rem; border-radius: 8px; transition: all .2s;
+  }
+  nav a:hover { color: var(--text); background: var(--border); }
+
+  /* ── Layout ── */
+  main { max-width: 1400px; margin: 0 auto; padding: 2.5rem; }
+
+  .section-title {
+    font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 1.25rem;
+    display: flex; align-items: center; gap: .75rem;
+  }
+  .section-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* ── Stat cards ── */
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 1rem; margin-bottom: 3rem;
+  }
+
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.5rem 1.25rem;
+    position: relative; overflow: hidden;
+    animation: fadeUp .5s ease both;
+  }
+  .stat-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--c, var(--accent));
+  }
+  .stat-card:nth-child(2) { --c: var(--accent2); }
+  .stat-card:nth-child(3) { --c: var(--accent3); }
+  .stat-card:nth-child(4) { --c: var(--danger); }
+
+  .stat-label { font-size: .72rem; color: var(--muted); font-weight: 600;
+    letter-spacing: .06em; text-transform: uppercase; margin-bottom: .6rem; }
+  .stat-value { font-size: 2.4rem; font-weight: 800; line-height: 1; }
+  .stat-sub   { font-size: .75rem; color: var(--muted); margin-top: .4rem; }
+
+  /* ── Two-column main content ── */
+  .content-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 3rem;
+  }
+
+  /* ── Panel ── */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    animation: fadeUp .6s ease both;
+  }
+  .panel-header {
+    padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    font-weight: 700; font-size: .9rem;
+  }
+  .panel-body { padding: 1.25rem 1.5rem; }
+
+  /* ── Product table ── */
+  .products-section { margin-bottom: 3rem; }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: .82rem;
+  }
+  thead th {
+    text-align: left; font-size: .68rem; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); padding: .75rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody tr { border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+  tbody tr:hover { background: color-mix(in srgb, white 2%, transparent); }
+  td { padding: .7rem 1rem; vertical-align: middle; }
+
+  .pill {
+    display: inline-block; font-size: .67rem; font-weight: 700;
+    padding: .2rem .65rem; border-radius: 99px; text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .pill-green  { background: color-mix(in srgb, var(--accent) 15%, transparent);
+                  color: var(--accent); }
+  .pill-red    { background: color-mix(in srgb, var(--danger) 15%, transparent);
+                  color: var(--danger); }
+  .pill-yellow { background: color-mix(in srgb, var(--accent3) 15%, transparent);
+                  color: var(--accent3); }
+  .pill-purple { background: color-mix(in srgb, var(--accent2) 15%, transparent);
+                  color: var(--accent2); }
+
+  /* ── Order card ── */
+  .order-card {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: .75rem;
+  }
+  .order-meta { display: flex; justify-content: space-between; align-items: flex-start; }
+  .order-id { font-family: 'DM Mono', monospace; font-size: .75rem; color: var(--muted); }
+  .order-total { font-size: 1.15rem; font-weight: 800; color: var(--accent3); }
+  .order-items { margin-top: .6rem; font-size: .78rem; color: var(--muted); }
+
+  /* ── User cards ── */
+  .user-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .user-card {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1.25rem;
+  }
+  .user-avatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 1.1rem; margin-bottom: .75rem;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    color: var(--bg);
+  }
+  .user-name  { font-weight: 700; font-size: .95rem; }
+  .user-email { font-size: .75rem; color: var(--muted); margin-top: .15rem; font-family: 'DM Mono', monospace; }
+  .user-role  { margin-top: .6rem; }
+
+  /* ── API Explorer ── */
+  .api-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: .75rem; margin-bottom: 3rem;
+  }
+  .api-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+    display: flex; align-items: center; gap: 1rem; cursor: pointer;
+    text-decoration: none; color: var(--text);
+    transition: all .2s; animation: fadeUp .7s ease both;
+  }
+  .api-card:hover { border-color: var(--accent2); transform: translateY(-2px); }
+  .method-tag {
+    font-family: 'DM Mono', monospace; font-size: .68rem; font-weight: 500;
+    padding: .25rem .5rem; border-radius: 5px; min-width: 40px; text-align: center;
+    background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent);
+  }
+  .method-tag.post {
+    background: color-mix(in srgb, var(--accent3) 15%, transparent); color: var(--accent3);
+  }
+  .api-path { font-family: 'DM Mono', monospace; font-size: .8rem; color: var(--muted); }
+  .api-desc { font-size: .78rem; color: var(--muted); margin-top: .15rem; }
+
+  /* ── Pattern tags ── */
+  .pattern-list { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 3rem; }
+  .pattern-chip {
+    font-size: .75rem; font-weight: 700; padding: .4rem 1rem; border-radius: 99px;
+    border: 1px solid var(--border); color: var(--muted);
+    font-family: 'DM Mono', monospace;
+  }
+  .pattern-chip span { color: var(--accent2); margin-right: .35rem; }
+
+  /* ── Mono values ── */
+  .mono { font-family: 'DM Mono', monospace; }
+
+  /* ── Animations ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center; padding: 2rem; font-size: .75rem; color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+
+<body>
+<div class="page">
+
+<header>
+  <div class="logo">TechStore</div>
+  <nav>
+    <a href="#overview">Overview</a>
+    <a href="#products">Products</a>
+    <a href="#orders">Orders</a>
+    <a href="#users">Accounts</a>
+    <a href="#api">API</a>
+  </nav>
+  <div class="badge">UML → Python → Flask</div>
+</header>
+
+<main>
+
+  <!-- ── Design Patterns ── -->
+  <div class="section-title">Design Patterns</div>
+  <div class="pattern-list">
+    <div class="pattern-chip"><span>Factory</span>AccountFactory → Customer / Admin</div>
+    <div class="pattern-chip"><span>Singleton</span>Manager — one global instance</div>
+    <div class="pattern-chip"><span>Strategy</span>PaymentGateway → CreditCard / EWallet</div>
+    <div class="pattern-chip"><span>Composition</span>Customer ◆── ShoppingCart</div>
+    <div class="pattern-chip"><span>Aggregation</span>Catalogue ◇── Category ◇── Product</div>
+  </div>
+
+  <!-- ── Stats ── -->
+  <div id="overview" class="section-title" style="margin-top:1rem">Overview</div>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Products</div>
+      <div class="stat-value">{{ manager.products | length }}</div>
+      <div class="stat-sub">
+        {{ manager.products | selectattr('stock_quantity', 'gt', 0) | list | length }} in stock
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Orders</div>
+      <div class="stat-value">{{ manager.orders | length }}</div>
+      <div class="stat-sub">All time</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Categories</div>
+      <div class="stat-value">{{ catalogue.categories | length }}</div>
+      <div class="stat-sub">in {{ catalogue.name }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Reports</div>
+      <div class="stat-value">{{ manager.reports | length }}</div>
+      <div class="stat-sub">Generated</div>
+    </div>
+  </div>
+
+  <!-- ── Two column ── -->
+  <div class="content-grid">
+
+    <!-- Orders panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <span>Recent Orders</span>
+        <a href="/api/orders" class="badge" style="text-decoration:none">JSON ↗</a>
+      </div>
+      <div class="panel-body">
+        {% if manager.orders %}
+          {% for order in manager.orders %}
+          <div class="order-card">
+            <div class="order-meta">
+              <div>
+                <div class="order-id mono">{{ order.order_id[:8] }}…</div>
+                <div style="font-weight:700; margin-top:.25rem">{{ order.customer.username }}</div>
+              </div>
+              <div style="text-align:right">
+                <div class="order-total">${{ "%.2f"|format(order.total_amount) }}</div>
+                {% if order.status == 'shipped' %}
+                  <span class="pill pill-purple">{{ order.status }}</span>
+                {% elif order.status == 'delivered' %}
+                  <span class="pill pill-green">{{ order.status }}</span>
+                {% elif order.status == 'processing' %}
+                  <span class="pill pill-yellow">{{ order.status }}</span>
+                {% else %}
+                  <span class="pill">{{ order.status }}</span>
+                {% endif %}
+              </div>
+            </div>
+            <div class="order-items">
+              {{ order.items | length }} item(s) &nbsp;·&nbsp;
+              {% if order.is_paid() %}<span style="color:var(--accent)">✓ Paid</span>
+              {% else %}<span style="color:var(--danger)">Unpaid</span>{% endif %}
+              {% if order.feedback %}&nbsp;·&nbsp; ★ {{ order.feedback.rating }}/5{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p style="color:var(--muted); font-size:.85rem">No orders yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Catalogue panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <span>Catalogue — {{ catalogue.name }}</span>
+        <a href="/api/catalogue" class="badge" style="text-decoration:none">JSON ↗</a>
+      </div>
+      <div class="panel-body">
+        {% for cat in catalogue.categories %}
+        <div style="margin-bottom:1.25rem">
+          <div style="font-weight:700; font-size:.88rem; margin-bottom:.5rem">
+            {{ cat.name }}
+            <span class="pill pill-purple" style="margin-left:.4rem">{{ cat.products|length }} products</span>
+          </div>
+          <div style="font-size:.78rem; color:var(--muted); margin-bottom:.5rem">{{ cat.description }}</div>
+          {% for p in cat.products %}
+          <div style="display:flex; justify-content:space-between; padding:.35rem 0;
+                      border-bottom:1px solid var(--border); font-size:.8rem;">
+            <span>{{ p.name }}</span>
+            <span style="display:flex; gap:.5rem; align-items:center;">
+              <span style="color:var(--accent3); font-weight:700">${{ "%.2f"|format(p.price) }}</span>
+              {% if p.is_available() %}
+                <span class="pill pill-green">in stock</span>
+              {% else %}
+                <span class="pill pill-red">OOS</span>
+              {% endif %}
+            </span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Products Table ── -->
+  <div id="products" class="section-title">All Products</div>
+  <div class="panel products-section">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Name</th><th>Description</th>
+          <th>Price</th><th>Stock</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in manager.products %}
+        <tr>
+          <td class="mono" style="color:var(--muted)">{{ p.product_id }}</td>
+          <td style="font-weight:700">{{ p.name }}</td>
+          <td style="color:var(--muted)">{{ p.description }}</td>
+          <td style="color:var(--accent3); font-weight:700">${{ "%.2f"|format(p.price) }}</td>
+          <td>{{ p.stock_quantity }}</td>
+          <td>
+            {% if p.is_available() %}
+              <span class="pill pill-green">Available</span>
+            {% else %}
+              <span class="pill pill-red">Out of Stock</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Users ── -->
+  <div id="users" class="section-title">Accounts</div>
+  <div class="user-grid" style="margin-bottom:3rem">
+    <!-- Customer -->
+    <div class="user-card">
+      <div class="user-avatar">{{ customer.username[0] }}</div>
+      <div class="user-name">{{ customer.username }}</div>
+      <div class="user-email">{{ customer.email }}</div>
+      <div class="user-role" style="margin-top:.6rem">
+        <span class="pill pill-green">Customer</span>
+        <span style="margin-left:.5rem; font-size:.78rem; color:var(--muted)">
+          {{ customer.orders|length }} order(s) · {{ customer.support_tickets|length }} ticket(s)
+        </span>
+      </div>
+      {% if customer.phone %}
+      <div style="font-size:.78rem; color:var(--muted); margin-top:.5rem">📞 {{ customer.phone }}</div>
+      {% endif %}
+    </div>
+    <!-- Admin -->
+    <div class="user-card">
+      <div class="user-avatar" style="background:linear-gradient(135deg,var(--accent3),var(--danger))">
+        {{ admin.username[0] }}
+      </div>
+      <div class="user-name">{{ admin.username }}</div>
+      <div class="user-email">{{ admin.email }}</div>
+      <div class="user-role" style="margin-top:.6rem">
+        <span class="pill pill-yellow">Admin</span>
+        <span style="margin-left:.5rem; font-size:.78rem; color:var(--muted)">
+          Role: {{ admin.role }}
+        </span>
+      </div>
+      <div style="font-size:.78rem; color:var(--muted); margin-top:.5rem">
+        🔑 Created by AccountFactory
+      </div>
+    </div>
+  </div>
+
+  <!-- ── API Explorer ── -->
+  <div id="api" class="section-title">API Endpoints</div>
+  <div class="api-grid">
+    {% set endpoints = [
+      ("GET", "/api/products",          "List all products"),
+      ("GET", "/api/catalogue",         "Full catalogue with categories"),
+      ("GET", "/api/categories",        "All product categories"),
+      ("GET", "/api/orders",            "All processed orders"),
+      ("GET", "/api/cart",              "Demo customer's cart"),
+      ("POST","/api/cart/add",          "Add product to cart"),
+      ("GET", "/api/reports/inventory", "Generate inventory report"),
+      ("GET", "/api/reports/orders",    "Generate orders report"),
+      ("GET", "/api/feedback",          "All customer feedback"),
+      ("GET", "/api/tickets",           "All support tickets"),
+      ("POST","/api/tickets",           "Create support ticket"),
+      ("GET", "/api/manager",           "Manager singleton state"),
+    ] %}
+    {% for method, path, desc in endpoints %}
+    <a class="api-card" href="{{ path }}" {% if method == 'POST' %}onclick="return false"{% endif %}>
+      <div class="method-tag {% if method == 'POST' %}post{% endif %}">{{ method }}</div>
+      <div>
+        <div class="api-path">{{ path }}</div>
+        <div class="api-desc">{{ desc }}</div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+</main>
+
+<footer>
+  Built from UML → Python classes (Factory · Singleton · Strategy) → Flask &nbsp;|&nbsp;
+  All {{ manager.products|length }} products · {{ manager.orders|length }} orders · {{ manager.reports|length }} reports
+</footer>
+
+</div>
+</body>
+</html>
