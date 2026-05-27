@@ -6,8 +6,8 @@ plus a rich HTML dashboard.
 import uuid
 from flask import Flask, jsonify, render_template, request, abort
 
-# Use the single all_classes.py file (no models/ package needed)
-from all_classes import (
+# Use the package models
+from models import (
     AccountFactory, Manager, Catalogue, Category, Product,
     CreditCardGateway, EWalletGateway, Payment, Shipment,
 )

@@ -10,6 +10,25 @@ ecommerce_app/
 ├── app.py                    # Flask application + seed data + API routes
 ├── all_classes.py            # ★ Standalone single-file version of ALL classes
 ├── requirements.txt
+├── models/
+│   ├── __init__.py           # Convenient re-exports
+│   ├── account.py            # Base Account
+│   ├── account_factory.py    # Factory Pattern
+│   ├── customer.py           # Customer (extends Account)
+│   ├── admin.py              # Admin (extends Account)
+│   ├── manager.py            # Singleton Pattern
+│   ├── report.py
+│   ├── product.py
+│   ├── category.py
+│   ├── catalogue.py
+│   ├── shopping_cart.py      # CartItem + ShoppingCart (Composition)
+│   ├── order.py
+│   ├── invoice.py
+│   ├── payment_gateway.py    # Strategy Pattern (CreditCard + EWallet)
+│   ├── payment.py
+│   ├── shipment.py
+│   ├── feedback.py
+│   └── support_ticket.py
 └── templates/
     └── dashboard.html        # Rich HTML dashboard
 ```
@@ -21,9 +40,12 @@ ecommerce_app/
 pip install flask
 
 # 2. Run the Flask website
+cd ecommerce_app
 python app.py
 # → Open http://localhost:5000
 
+# 3. Or run the standalone demo (no Flask needed)
+python all_classes.py
 ```
 
 ## API Endpoints
