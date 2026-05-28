@@ -1,4 +1,4 @@
-# E-Commerce System — UML → Python → Flask
+# ACE Mart System — Python + Flask
 
 Generated from the UML class diagram. Every class lives in its own file
 under `models/`, with all classes also bundled in `all_classes.py`.
@@ -6,7 +6,7 @@ under `models/`, with all classes also bundled in `all_classes.py`.
 ## Project structure
 
 ```
-ecommerce_app/
+Software-Architecture-Assignment-3/
 ├── app.py                    # Flask application + seed data + API routes
 ├── all_classes.py            # ★ Standalone single-file version of ALL classes
 ├── requirements.txt
@@ -30,7 +30,9 @@ ecommerce_app/
 │   ├── feedback.py
 │   └── support_ticket.py
 └── templates/
-    └── dashboard.html        # Rich HTML dashboard
+    ├── cart.html
+    ├── orders.html
+    └── store.html
 ```
 
 ## Quick start
@@ -39,12 +41,12 @@ ecommerce_app/
 # 1. Install Flask
 pip install flask
 
-# 2. Run the Flask website
-cd ecommerce_app
+# 2a. Run the Flask website
+cd Software-Architecture-Assignment-3
 python app.py
 # → Open http://localhost:5000
 
-# 3. Or run the standalone demo (no Flask needed)
+# 2b. The standalone demo for all classes (no Flask needed)
 python all_classes.py
 ```
 
