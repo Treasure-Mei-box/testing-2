@@ -104,8 +104,15 @@ cat.add_product(Product("p1", "Clean Code", "...", 35.00, 10))
 
 ## Demo Account 
 Use these pre-seeded accounts to log in and test different user roles across the platform:
-| Role	              | Email Address	  | Password   | Description / Permissions                                                                                       |
-|---------------------|-------------------|------------|-----------------------------------------------------------------------------------------------------------------|
-| Customer (Shopper)  | alex@acemart.com  |	pw123	   | Can shop, manage cart/addresses, pay, view invoices, raise tickets, and leave feedback.                         |
-| Manager (Admin)     |	sam@acemart.com	  | admin123   | Full access, including the real-time visual charts dashboard, report generation, and support ticket assignment. |
-| Staff (Admin)	      | lee@acemart.com	  | staff123   | Operational access to manage products, restock, transition orders, and resolve assigned tickets.                |
+| Role	              | Email Address	  | Password   | Description / Permissions               |
+|---------------------|-------------------|------------|-----------------------------------------|
+| Customer (Shopper)  | alex@acemart.com  |	pw123	   | Can shop, manage cart/addresses, pay,   |
+|                     |                   |            | view invoices, raise tickets, and       |
+|                     |                   |            | leave feedback.                         |
+| Manager (Admin)     |	sam@acemart.com	  | admin123   | Full access, including the real-time    |
+|                     |                   |            | visual charts dashboard, report         | 
+|                     |                   |            | generation, and support ticket          |
+|                     |                   |            | assignment.                             |
+| Staff (Admin)	      | lee@acemart.com	  | staff123   | Operational access to manage products,  |
+|                     |                   |            | restock, transition orders, and resolve |
+|                     |                   |            | assigned tickets.                       |
