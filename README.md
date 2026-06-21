@@ -1,4 +1,4 @@
-# ACE Mart System — Python + Flask
+# ACE Mart System — Python + Flask 
 
 Generated from the UML class diagram. Every class lives in its own file
 under `models/`, with all classes also bundled in `all_classes.py`.
@@ -8,7 +8,7 @@ under `models/`, with all classes also bundled in `all_classes.py`.
 ```
 Software-Architecture-Assignment-3/
 ├── app.py                    # Flask application + seed data + API routes
-├── all_classes.py            # ★ Standalone single-file version of ALL classes
+├── all_classes.py            # Standalone single-file version of ALL classes
 ├── requirements.txt
 ├── models/
 │   ├── __init__.py           # Convenient re-exports
@@ -17,22 +17,28 @@ Software-Architecture-Assignment-3/
 │   ├── customer.py           # Customer (extends Account)
 │   ├── admin.py              # Admin (extends Account)
 │   ├── manager.py            # Singleton Pattern
-│   ├── report.py
-│   ├── product.py
-│   ├── category.py
-│   ├── catalogue.py
+│   │── report.py             # Passive Report entity
+│   ├── product.py            # Product (soft-deletion & low-stock signaling)
+│   ├── category.py           # Category (soft deactivation)
+│   ├── catalogue.py          # Aggregate catalog lookup
 │   ├── shopping_cart.py      # CartItem + ShoppingCart (Composition)
-│   ├── order.py
-│   ├── invoice.py
-│   ├── payment_gateway.py    # Strategy Pattern (CreditCard + EWallet)
-│   ├── payment.py
-│   ├── shipment.py
-│   ├── feedback.py
-│   └── support_ticket.py
+│   ├── order.py              # Order state-machine
+│   ├── invoice.py            # Invoice entity (stores true grand totals)
+│   ├── payment_gateway.py    # Strategy Pattern (CreditCard vs EWallet)
+│   ├── payment.py            # Payment processor
+│   ├── shipment.py           # Shipment logistics controller
+│   ├── feedback.py           # Customer Feedback
+│   └── support_ticket.py     # Customer Support Ticket
 └── templates/
-    ├── cart.html
-    ├── orders.html
-    └── store.html
+    ├── store.html            # Shopper Catalog & Navigation
+    ├── cart.html             # Interactive Cart, Address Book, & Payment Gateway
+    ├── payment.html          # Standalone Payment Checkout Portal
+    ├── orders.html           # Customer Order History (Interactive card toggles)
+    ├── invoice.html          # Printable, Paper-style Invoice Page
+    ├── support.html          # Support Center (Ticket submission & Reopening)
+    ├── profile.html          # Unified Profile Settings & Password Reset (Customer & Staff)
+    ├── admin.html            # Operational Admin Panel (Orders lifecycle, Categories & Tickets)
+    └── admin_dashboard.html  # Manager Real-Time Analytical Charts Dashboard
 ```
 
 ## Quick start
