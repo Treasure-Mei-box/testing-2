@@ -1,6 +1,7 @@
 """
-ShoppingCart model - owned by Customer (composition), contains Products,
-and converts to an Order.
+ShoppingCart model - owned by Customer (composition), contains CartItems,
+queries Catalogue for stock availability, and converts to an Order.
+ShoppingCart ..> Catalogue : queries stock  (UML dependency)
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING, Dict, Optional
@@ -9,6 +10,7 @@ from datetime import datetime
 if TYPE_CHECKING:
     from .customer import Customer
     from .product import Product
+    from .catalogue import Catalogue
     from .order import Order
 
 
@@ -36,9 +38,25 @@ class ShoppingCart:
         self.items: Dict[str, CartItem] = {}
         self.created_at = datetime.now()
 
-    def add_product(self, product: Product, quantity: int = 1) -> bool:
-        if not product.is_available():
-            return False
+    def add_product(self, product: Product, quantity: int = 1,
+                    catalogue: Optional[Catalogue] = None) -> bool:
+        """
+        Add a product to the cart.
+        Optionally accepts a Catalogue reference to verify system-wide
+        availability (UML: ShoppingCart ..> Catalogue : queries stock).
+        Falls back to direct product.is_available() check.
+        """
+        # Delegate to Catalogue if provided (Information Expert for inventory)
+        if catalogue is not None:
+            all_products = catalogue.all_products()
+            live_product = next((p for p in all_products
+                                 if p.product_id == product.product_id), None)
+            if live_product is None or not live_product.is_available():
+                return False
+        else:
+            if not product.is_available():
+                return False
+
         if product.product_id in self.items:
             self.items[product.product_id].quantity += quantity
         else:
@@ -55,6 +73,11 @@ class ShoppingCart:
         if product_id in self.items:
             if quantity <= 0:
                 return self.remove_product(product_id)
+            
+            # Stock Validation: block update if quantity exceeds available inventory
+            if quantity > self.items[product_id].product.stock_quantity:
+                return False
+                
             self.items[product_id].quantity = quantity
             return True
         return False
@@ -69,17 +92,46 @@ class ShoppingCart:
         self.items = {}
 
     def convert_to_order(self) -> Optional[Order]:
+        """
+        Snapshots cart items into a pending Order WITHOUT clearing the cart
+        or reducing stock. Stock reduction and cart clear happen only after
+        payment is confirmed via confirm_order(). This prevents the cart from
+        being wiped if the customer cancels the payment modal and retries.
+
+        CRC 4.9: 'Converts cart contents to an Order — Order, Customer'
+        CRC 4.9: 'Clear all items after successful order placement — Order'
+        A2 Scenario 1: cart clears only after Steps 14-16 (payment authorised).
+        """
         if not self.items:
             return None
+
+        # Validate sufficient stock for every item before creating the Order
+        for item in self.items.values():
+            if item.product.stock_quantity < item.quantity:
+                return None  # Abort — insufficient stock
+
         from .order import Order
         import uuid
+
+        # Snapshot cart items (cart NOT cleared until payment confirmed)
+        order_items = list(self.items.values())
+
         order = Order(
             order_id=str(uuid.uuid4()),
             customer=self.owner,
-            items=list(self.items.values()),
+            items=order_items,
         )
-        self.clear()
         return order
+
+    def confirm_order(self) -> None:
+        """
+        Called after payment succeeds (A2 Scenario 1 Step 16).
+        Reduces stock for each product and clears the cart.
+        CRC 4.9: 'Clear all items after successful order placement'
+        """
+        for item in self.items.values():
+            item.product.reduce_stock(item.quantity)
+        self.clear()
 
     def to_dict(self) -> dict:
         return {
@@ -90,4 +142,5 @@ class ShoppingCart:
         }
 
     def __repr__(self):
-        return f"<ShoppingCart owner={self.owner.username} items={self.item_count()} total=${self.total()}>"
+        return (f"<ShoppingCart owner={self.owner.username} "
+                f"items={self.item_count()} total=${self.total()}>")

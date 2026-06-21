@@ -261,16 +261,50 @@ footer strong { color: var(--orange); font-family: 'Righteous', cursive; }
   </div>
 
   <div class="nav-actions">
-    <a class="orders-link" href="/orders">My Orders</a>
-    <a class="cart-btn" href="/cart">
-      🛒 Cart
-      <span class="cart-count" id="cart-count">{{ cart.item_count() }}</span>
-    </a>
+    {% if user_role in ('manager', 'staff', 'admin') %}
+      {# Staff / admin view — prominently styled Admin Panel toggle #}
+      <a class="orders-link" href="/admin" style="font-weight:700;color:var(--orange);border-color:var(--orange);">⚙️ Admin Panel</a>
+      <a class="orders-link" href="/logout" style="color:var(--red);">Sign Out</a>
+    {% elif user_role == 'customer' %}
+      {# Logged-in customer — no admin icon #}
+      <a class="orders-link" href="/support">🎫 Support</a>
+      <a class="orders-link" href="/orders">My Orders</a>
+      <a class="orders-link" href="/profile">👤 Profile</a>
+      <!-- Real-time Order Status Notification Bell -->
+      <div style="position:relative;cursor:pointer;margin-right:.5rem;display:inline-block;" id="cust-bell-wrapper">
+        <span style="font-size:1.4rem;" onclick="toggleCustNotifications(event)">🔔</span>
+        <span id="cust-notif-badge" style="display:none;position:absolute;top:-4px;right:-6px;background:var(--red);color:#fff;font-size:.65rem;font-weight:700;border-radius:99px;padding:.1rem .35rem;min-width:18px;text-align:center;" onclick="toggleCustNotifications(event)">0</span>
+        
+        <!-- Notification Dropdown Menu -->
+        <div id="cust-notif-dropdown" style="display:none;position:absolute;top:38px;right:0;width:300px;background:var(--surface);border:2px solid var(--border);border-radius:12px;box-shadow:var(--shadow);z-index:150;padding:.75rem 1rem;text-align:left;">
+          <div style="font-family:'Righteous',cursive;font-size:.95rem;margin-bottom:.5rem;display:flex;justify-content:space-between;align-items:center;">
+            <span>🔔 Notifications</span>
+            <button style="background:none;border:none;color:var(--orange);font-size:.72rem;font-weight:700;cursor:pointer;" onclick="markCustNotifsRead(event)">Mark all read</button>
+          </div>
+          <div id="cust-notif-list" style="max-height:220px;overflow-y:auto;font-size:.82rem;display:flex;flex-direction:column;gap:.35rem;">
+            <div style="color:var(--muted);text-align:center;padding:1rem 0;">No active alerts.</div>
+          </div>
+        </div>
+      </div>
+      <a class="orders-link" href="/logout" style="color:var(--red);">Sign Out</a>
+      <a class="cart-btn" href="/cart">
+        🛒 Cart
+        <span class="cart-count" id="cart-count">{{ cart.item_count() if cart else 0 }}</span>
+      </a>
+    {% else %}
+      {# Guest — show sign in + admin link #}
+      <a class="orders-link" href="/login?mode=staff">⚙️ Admin</a>  <!-- Points directly to staff portal -->
+      <a class="orders-link" href="/login" style="font-weight:700;color:var(--orange);">Sign In</a>
+      <a class="cart-btn" href="/login">
+        🛒 Cart
+        <span class="cart-count" id="cart-count">0</span>
+      </a>
+    {% endif %}
   </div>
 </nav>
 
 <!-- HERO -->
-{% if not search_q and cat_filter == 'all' %}
+{% if not search_q %}
 <div class="hero">
   <div class="floaters">
     <div class="floater">🍟</div><div class="floater">🍫</div>
@@ -287,8 +321,11 @@ footer strong { color: var(--orange); font-family: 'Righteous', cursive; }
 <div class="cats">
   <a class="cat-pill {% if cat_filter == 'all' %}active{% endif %}" href="/">🌟 All Snacks</a>
   {% for cat in categories %}
-  <a class="cat-pill {% if cat_filter == cat.category_id %}active{% endif %}"
-     href="/?category={{ cat.category_id }}">{{ cat.name }}</a>
+    <!-- Filter out inactive categories from shopper catalog view -->
+    {% if cat.is_active %}
+    <a class="cat-pill {% if cat_filter == cat.category_id %}active{% endif %}"
+       href="/?category={{ cat.category_id }}">{{ cat.name }}</a>
+    {% endif %}
   {% endfor %}
 </div>
 
@@ -321,6 +358,9 @@ footer strong { color: var(--orange); font-family: 'Righteous', cursive; }
     </div>
     <div class="card-foot">
       <div class="card-price">${{ "%.2f"|format(p.price) }}</div>
+      
+      <!-- Only render the Add to Cart button for Guests or Customers (hide from Manager & Staff) -->
+      {% if user_role not in ('manager', 'staff', 'admin') %}
       <button class="add-btn"
               data-id="{{ p.product_id }}"
               data-name="{{ p.name | e }}"
@@ -328,6 +368,7 @@ footer strong { color: var(--orange); font-family: 'Righteous', cursive; }
               {% if not p.is_available() %}disabled{% endif %}>
         {% if p.is_available() %}＋ Add{% else %}Sold Out{% endif %}
       </button>
+      {% endif %}
     </div>
   </div>
   {% endfor %}
@@ -347,10 +388,11 @@ footer strong { color: var(--orange); font-family: 'Righteous', cursive; }
 
 <!-- TOAST -->
 <div class="toast" id="toast">🛒 <span id="toast-msg">Added to cart!</span></div>
-<div id="store-data" data-cart-count="{{ cart.item_count() }}" hidden></div>
+<div id="store-data" data-cart-count="{{ cart.item_count() if cart else 0 }}" data-logged-in="{{ 'true' if is_logged_in else 'false' }}" hidden></div>
 
 <script>
 let cartCount = parseInt(document.getElementById('store-data').dataset.cartCount, 10);
+const isLoggedIn = document.getElementById('store-data').dataset.loggedIn === 'true';
 
 // Apply staggered animation delays from data attribute
 document.querySelectorAll('.card[data-delay]').forEach(card => {
@@ -358,6 +400,12 @@ document.querySelectorAll('.card[data-delay]').forEach(card => {
 });
 
 async function addToCart(btn) {
+  // Redirect to login if not authenticated
+  if (!isLoggedIn) {
+    showToast('Please sign in to add items to cart 🔒');
+    setTimeout(() => window.location.href = '/login', 1000);
+    return;
+  }
   const productId = btn.dataset.id;
   const name      = btn.dataset.name;
   btn.disabled = true;
@@ -368,6 +416,11 @@ async function addToCart(btn) {
       body: JSON.stringify({product_id: productId, quantity: 1})
     });
     const data = await res.json();
+    if (data.login_required) {
+      showToast('Please sign in first 🔒');
+      setTimeout(() => window.location.href = '/login', 1000);
+      return;
+    }
     if (data.success) {
       cartCount = data.item_count;
       document.getElementById('cart-count').textContent = cartCount;
@@ -379,6 +432,9 @@ async function addToCart(btn) {
         btn.classList.remove('added');
         btn.disabled = false;
       }, 1500);
+    } else {
+      showToast('❌ ' + data.error);
+      btn.disabled = false;
     }
   } catch(e) {
     btn.disabled = false;
@@ -390,6 +446,84 @@ function showToast(msg) {
   document.getElementById('toast-msg').textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── Real-time Customer Order Status Notifications ──
+let lastCustNotifCount = 0;
+
+function toggleCustNotifications(event) {
+  event.stopPropagation();
+  const dropdown = document.getElementById('cust-notif-dropdown');
+  dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', () => {
+  const dropdown = document.getElementById('cust-notif-dropdown');
+  if (dropdown) dropdown.style.display = 'none';
+});
+
+async function markCustNotifsRead(event) {
+  event.stopPropagation();
+  const res = await fetch('/api/customer/notifications/read', { method: 'POST' });
+  const data = await res.json();
+  if (data.success) {
+    document.getElementById('cust-notif-badge').style.display = 'none';
+    lastCustNotifCount = 0;
+    fetchCustomerNotifications();
+  }
+}
+
+async function fetchCustomerNotifications() {
+  try {
+    const res = await fetch('/api/customer/notifications');
+    if (!res.ok) return;
+    const data = await res.json();
+    
+    // Update badge count
+    const badge = document.getElementById('cust-notif-badge');
+    if (badge && data.unread_count > 0) {
+      badge.textContent = data.unread_count;
+      badge.style.display = 'block';
+      
+      // Proactive push warning (Toast) if unread count increases
+      if (data.unread_count > lastCustNotifCount && typeof showToast === 'function') {
+        const newestNotif = data.notifications[0];
+        showToast(`🔔 ${newestNotif.message}`);
+      }
+    } else if (badge) {
+      badge.style.display = 'none';
+    }
+    lastCustNotifCount = data.unread_count;
+
+    // Render notifications list items
+    const list = document.getElementById('cust-notif-list');
+    if (list && data.notifications.length > 0) {
+      list.innerHTML = '';
+      data.notifications.forEach(n => {
+        const item = document.createElement('div');
+        item.style.padding = '.5rem';
+        item.style.borderRadius = '8px';
+        item.style.border = '1px solid var(--border)';
+        item.style.background = n.read ? 'transparent' : 'rgba(255,107,43,.03)';
+        item.innerHTML = `
+          <div style="font-weight:700; color:var(--dark); line-height:1.3;">${n.message}</div>
+          <div style="font-size:.68rem; color:var(--muted); text-align:right; margin-top:.25rem;">${n.timestamp}</div>
+        `;
+        list.appendChild(item);
+      });
+    } else if (list) {
+      list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:1rem 0;">No active alerts.</div>';
+    }
+  } catch(e) {
+    console.error("Failed to check real-time order status notifications", e);
+  }
+}
+
+// Check for customer notifications immediately and poll every 4 seconds
+if (isLoggedIn) {
+  fetchCustomerNotifications();
+  setInterval(fetchCustomerNotifications, 4000);
 }
 </script>
 </body>

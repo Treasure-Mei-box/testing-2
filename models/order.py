@@ -42,10 +42,15 @@ class Order:
     def generate_invoice(self) -> Invoice:
         from .invoice import Invoice
         import uuid
+        
+        # Calculate grand total including shipping
+        shipping = 0 if self.total_amount >= 25 else 3.99
+        grand_total = round(self.total_amount + shipping, 2)
+        
         self.invoice = Invoice(
             invoice_id=str(uuid.uuid4()),
             order=self,
-            amount=self.total_amount,
+            amount=grand_total,  # <-- Stores the grand total paid by the customer
         )
         return self.invoice
 

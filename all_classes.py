@@ -73,7 +73,9 @@ class Customer(Account):
                  phone="", address=""):
         super().__init__(account_id, username, email, password_hash)
         self.phone = phone
-        self.address = address
+        self.address = address # This acts as the currently active address
+        self.addresses: List[str] = [address] if address else []  #to initialize the address book with the signup address
+        self.addresses: List[str] = [address] if address else []  # Saved addresses
         self.shopping_cart: Optional[ShoppingCart] = None
         self.orders: List[Order] = []
         self.feedback_list: List[Feedback] = []
@@ -149,10 +151,11 @@ class Manager:
 
     def __init__(self):
         if Manager._instance is not None:
-            raise RuntimeError("Use Manager.get_instance()")
+            raise RuntimeError("Use Manager.get_instance() — Manager is a Singleton.")
         self.products: List[Product] = []
         self.orders: List[Order] = []
         self.reports: List[Report] = []
+        self.alerts: List[dict] = []  # <-- Initialize alerts list
 
     @classmethod
     def get_instance(cls) -> Manager:
@@ -174,12 +177,115 @@ class Manager:
 
     def create_report(self, report_type: str, requested_by=None) -> Report:
         data = {}
+        
+        # Helper: pre-calculate product sales velocities
+        product_sales = {p.name: 0 for p in self.products}
+        category_sales = {}
+        total_units_sold = 0
+        
+        for o in self.orders:
+            if o.is_paid():
+                for item in o.items:
+                    product_sales[item.product.name] = product_sales.get(item.product.name, 0) + item.quantity
+                    total_units_sold += item.quantity
+                    
+                    # Group by Category ID
+                    cat_id = item.product.category_id or "Uncategorized"
+                    category_sales[cat_id] = round(category_sales.get(cat_id, 0.0) + item.subtotal(), 2)
+
         if report_type == "inventory":
-            data = {"total_products": len(self.products),
-                    "products": [p.to_dict() for p in self.products]}
+            out_of_stock = [p for p in self.products if p.stock_quantity == 0]
+            low_stock    = [p for p in self.products if 0 < p.stock_quantity <= 5]
+            
+            # KPI 3: Compile inventory turnover statistics (Units Sold vs. Average Inventory)
+            current_total_stock = sum(p.stock_quantity for p in self.products)
+            avg_inventory = current_total_stock + (total_units_sold / 2.0)
+            global_turnover_ratio = round(total_units_sold / avg_inventory, 2) if avg_inventory > 0 else 0.0
+            
+            # Product level stock velocities
+            turnover_details = []
+            for p in self.products:
+                p_sold = product_sales.get(p.name, 0)
+                p_avg = p.stock_quantity + (p_sold / 2.0)
+                p_turnover = round(p_sold / p_avg, 2) if p_avg > 0 else 0.0
+                turnover_details.append({
+                    "product_id": p.product_id,
+                    "name": p.name,
+                    "units_sold": p_sold,
+                    "turnover_ratio": p_turnover,
+                    "stock_left": p.stock_quantity
+                })
+                
+            data = {
+                "total_products": len(self.products),
+                "total_stock_units": sum(p.stock_quantity for p in self.products),
+                "out_of_stock_count": len(out_of_stock),
+                "low_stock_count": len(low_stock),
+                "global_turnover_ratio": global_turnover_ratio,
+                "turnover_details": turnover_details,
+                "out_of_stock": [p.to_dict() for p in out_of_stock],
+                "low_stock": [p.to_dict() for p in low_stock],
+                "products": [p.to_dict() for p in self.products],
+            }
+            
         elif report_type == "orders":
-            data = {"total_orders": len(self.orders),
-                    "orders": [o.to_dict() for o in self.orders]}
+            status_map = {}
+            for o in self.orders:
+                status_map[o.status] = status_map.get(o.status, 0) + 1
+            data = {
+                "total_orders": len(self.orders),
+                "by_status": status_map,
+                "orders": [o.to_dict() for o in self.orders],
+            }
+            
+        elif report_type == "sales":
+            invoices = [o.invoice for o in self.orders if o.invoice]
+            total_revenue = round(sum(inv.amount for inv in invoices if inv.is_paid), 2)
+            paid_orders   = [o for o in self.orders if o.is_paid()]
+            
+            # KPI 1: Calculates top-selling and low-performing products
+            sorted_sales = sorted(product_sales.items(), key=lambda x: x[1], reverse=True)
+            top_selling = [{"name": name, "qty_sold": qty} for name, qty in sorted_sales[:3]]
+            low_performing = [{"name": name, "qty_sold": qty} for name, qty in sorted_sales[-3:]][::-1]
+            
+            data = {
+                "total_revenue": total_revenue,
+                "total_paid_orders": len(paid_orders),
+                "total_invoices": len(invoices),
+                "average_order_value": round(total_revenue / len(paid_orders) if paid_orders else 0, 2),
+                "top_selling": top_selling,
+                "low_performing": low_performing,
+                "category_sales": category_sales,  # KPI 2: Category sales breakdown
+                "invoice_details": [inv.to_dict() for inv in invoices],
+            }
+            
+        elif report_type == "feedback":
+            feedbacks = [o.feedback for o in self.orders if o.feedback]
+            avg_rating = round(sum(f.rating for f in feedbacks) / len(feedbacks) if feedbacks else 0, 2)
+            data = {
+                "total_feedback": len(feedbacks),
+                "average_rating": avg_rating,
+                "five_star": sum(1 for f in feedbacks if f.rating == 5),
+                "four_star": sum(1 for f in feedbacks if f.rating == 4),
+                "three_star": sum(1 for f in feedbacks if f.rating == 3),
+                "two_star": sum(1 for f in feedbacks if f.rating == 2),
+                "one_star": sum(1 for f in feedbacks if f.rating == 1),
+                "feedbacks": [f.to_dict() for f in feedbacks],
+            }
+            
+        elif report_type == "support":
+            all_tickets = []
+            for o in self.orders:
+                all_tickets.extend(o.support_tickets)
+            resolved = [t for t in all_tickets if t.status == "resolved"]
+            data = {
+                "total_tickets": len(all_tickets),
+                "resolved": len(resolved),
+                "open": sum(1 for t in all_tickets if t.status == "open"),
+                "in_progress": sum(1 for t in all_tickets if t.status == "in_progress"),
+                "resolution_rate": round(len(resolved) / len(all_tickets) * 100 if all_tickets else 0, 1),
+            }
+            
         r = Report(str(uuid.uuid4()), report_type, datetime.now(), data, requested_by)
         self.reports.append(r)
         return r
@@ -230,7 +336,26 @@ class Product:
 
     def reduce_stock(self, qty):
         if self.stock_quantity >= qty:
-            self.stock_quantity -= qty; return True
+            self.stock_quantity -= qty
+            
+            # Low stock warning
+            if self.stock_quantity <= 10:
+                import uuid  # Standard library imports are fine
+                
+                # Simply reference Manager directly since it is in the same file
+                mgr = Manager.get_instance()
+                
+                if not any(a.get("product_id") == self.product_id and not a.get("read") for a in mgr.alerts):
+                    mgr.alerts.append({
+                        "alert_id": str(uuid.uuid4())[:8].upper(),
+                        "product_id": self.product_id,
+                        "name": self.name,
+                        "image_url": self.image_url,
+                        "stock_quantity": self.stock_quantity,
+                        "timestamp": datetime.now().strftime("%I:%M %p"),
+                        "read": False
+                    })
+            return True
         return False
 
     def restock(self, qty): self.stock_quantity += qty
@@ -241,7 +366,8 @@ class Product:
         return {"product_id": self.product_id, "name": self.name,
                 "description": self.description, "price": self.price,
                 "stock_quantity": self.stock_quantity, "category_id": self.category_id,
-                "is_available": self.is_available(), "image_url": self.image_url}
+                "is_available": self.is_available(), "image_url": self.image_url,
+                "is_active": self.is_active}
 
     def __repr__(self): return f"<Product {self.name} ${self.price}>"
 
@@ -270,7 +396,7 @@ class Category:
     def to_dict(self):
         return {"category_id": self.category_id, "name": self.name,
                 "description": self.description, "product_count": len(self.products),
-                "products": [p.to_dict() for p in self.products]}
+                "is_active": self.is_active,     "products": [p.to_dict() for p in self.products]}
 
     def __repr__(self): return f"<Category {self.name}>"
 
@@ -332,6 +458,19 @@ class ShoppingCart:
         self.owner = owner
         self.items: Dict[str, CartItem] = {}
         self.created_at = datetime.now()
+    
+    def update_quantity(self, product_id: str, quantity: int) -> bool:
+        if product_id in self.items:
+            if quantity <= 0:
+                return self.remove_product(product_id)
+            
+            # Stock Validation: block update if quantity exceeds available inventory
+            if quantity > self.items[product_id].product.stock_quantity:
+                return False
+                
+            self.items[product_id].quantity = quantity
+            return True
+        return False
 
     def add_product(self, p: Product, qty=1):
         if not p.is_available(): return False
@@ -389,7 +528,17 @@ class Order:
         return False
 
     def generate_invoice(self) -> Invoice:
-        self.invoice = Invoice(str(uuid.uuid4()), self, self.total_amount)
+        import uuid
+        
+        # Calculate grand total including shipping
+        shipping = 0 if self.total_amount >= 25 else 3.99
+        grand_total = round(self.total_amount + shipping, 2)
+        
+        self.invoice = Invoice(
+            invoice_id=str(uuid.uuid4()),
+            order=self,
+            amount=grand_total,  # <-- Stores the grand total paid by the customer
+        )
         return self.invoice
 
     def add_payment(self, p: Payment): self.payments.append(p)
@@ -621,6 +770,10 @@ class SupportTicket:
         self.resolution_notes = notes
 
     def close(self): self.status = "closed"
+
+    def reopen(self):
+        self.status = "open"
+        self.resolved_at = None
 
     def to_dict(self):
         return {"ticket_id": self.ticket_id, "customer_name": self.customer.username,

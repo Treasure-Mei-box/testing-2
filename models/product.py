@@ -16,6 +16,7 @@ class Product:
         self.stock_quantity = stock_quantity
         self.category_id = category_id
         self.image_url: str = ""
+        self.is_active: bool = True  # Default to active
 
     def is_available(self) -> bool:
         return self.stock_quantity > 0
@@ -23,6 +24,25 @@ class Product:
     def reduce_stock(self, quantity: int) -> bool:
         if self.stock_quantity >= quantity:
             self.stock_quantity -= quantity
+            
+            # Low Stock Alert Check: Trigger warning if stock falls to 5 or fewer units (CRC 4.6)
+            if self.stock_quantity <= 10:
+                from .manager import Manager
+                import uuid
+                from datetime import datetime
+                mgr = Manager.get_instance()
+                
+                # Avoid flooding: check if there is already an active unread alert for this product
+                if not any(a.get("product_id") == self.product_id and not a.get("read") for a in mgr.alerts):
+                    mgr.alerts.append({
+                        "alert_id": str(uuid.uuid4())[:8].upper(),
+                        "product_id": self.product_id,
+                        "name": self.name,
+                        "image_url": self.image_url,
+                        "stock_quantity": self.stock_quantity,
+                        "timestamp": datetime.now().strftime("%I:%M %p"),
+                        "read": False
+                    })
             return True
         return False
 

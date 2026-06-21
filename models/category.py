@@ -16,6 +16,7 @@ class Category:
         self.name = name
         self.description = description
         self.products: List[Product] = []
+        self.is_active: bool = True
 
     def add_product(self, product: Product):
         product.category_id = self.category_id

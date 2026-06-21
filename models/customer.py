@@ -21,10 +21,13 @@ class Customer(Account):
         super().__init__(account_id, username, email, password_hash)
         self.phone = phone
         self.address = address
+        #to initialize the address book with the signup address
+        self.addresses: List[str] = [address] if address else []
         self.shopping_cart: Optional[ShoppingCart] = None
         self.orders: List[Order] = []
         self.feedback_list: List[Feedback] = []
         self.support_tickets: List[SupportTicket] = []
+        self.notifications: List[dict] = []
 
     def get_or_create_cart(self) -> ShoppingCart:
         from .shopping_cart import ShoppingCart
@@ -51,12 +54,24 @@ class Customer(Account):
         )
         self.support_tickets.append(ticket)
         return ticket
+    
+    def add_notification(self, message: str, order_id: str = None):
+        import uuid
+        from datetime import datetime
+        self.notifications.append({
+            "notification_id": str(uuid.uuid4())[:8].upper(),
+            "message": message,
+            "order_id": order_id,
+            "timestamp": datetime.now().strftime("%I:%M %p"),
+            "read": False
+        })
 
     def to_dict(self) -> dict:
         base = super().to_dict()
         base.update({
             "phone": self.phone,
             "address": self.address,
+            "addresses": self.addresses, 
             "order_count": len(self.orders),
             "ticket_count": len(self.support_tickets),
         })
