@@ -121,32 +121,6 @@ def seed_data():
     for cat in categories.values():
         catalogue.add_category(cat)
 
-    # Demo order
-    cart = customer.get_or_create_cart()
-    cart.add_product(products["p-001"], 2)
-    cart.add_product(products["p-010"], 1)
-    order = customer.place_order()
-    if order:
-        mgr.process_order(order)
-        order.generate_invoice()
-        gw  = CreditCardGateway("**** **** **** 4242", "12/27")
-        pmt = Payment(str(uuid.uuid4()), order, order.total_amount, gw)
-        order.add_payment(pmt)
-        pmt.process()
-        cart.confirm_order()  # reduce stock + clear cart after demo payment
-        ship = Shipment(str(uuid.uuid4()), order, "SnackExpress", "SE-00123", customer.address)
-        order.add_shipment(ship)
-        ship.ship()
-        ship.mark_delivered()
-        fb = order.receive_feedback(5, "Arrived super fast and the truffle chips are AMAZING!")
-        customer.feedback_list.append(fb)
-
-    ticket = customer.raise_support_ticket(
-        "Missing item in order",
-        "I ordered 2 Truffle Chips but only received 1 bag."
-    )
-    ticket.assign(admin)
-
     app.config["STORE"] = {
         "catalogue":  catalogue,
         "customer":   customer,
@@ -470,6 +444,9 @@ def api_checkout():
     customer.orders.append(order)
     mgr.process_order(order)
     order.generate_invoice()
+
+    # Trigger Staff Notification
+    mgr.add_staff_notification(f"🛍️ New Order #{order.order_id[:8].upper()} placed by {customer.username}!")
     
     # Calculate grand total including shipping to return to frontend gateways
     shipping = 0 if order.total_amount >= 25 else 3.99
@@ -500,6 +477,9 @@ def api_orders():
 @app.route("/api/admin/product/add", methods=["POST"])
 @login_required_admin
 def api_admin_add_product():
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Unauthorized: Only staff can add products."}), 403
     store = get_store(); admin = get_current_user(); mgr = Manager.get_instance()
     data  = request.get_json(force=True) or {}
     name  = data.get("name", "").strip()
@@ -526,6 +506,9 @@ def api_admin_add_product():
 @app.route("/api/admin/product/restock", methods=["POST"])
 @login_required_admin
 def api_admin_restock():
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Unauthorized: Only staff can restock products."}), 403
     data = request.get_json(force=True) or {}
     pid  = data.get("product_id", "").strip()
     if not pid: return jsonify({"success": False, "error": "product_id is required"}), 400
@@ -541,6 +524,9 @@ def api_admin_restock():
 @app.route("/api/admin/product/remove", methods=["POST"])
 @login_required_admin
 def api_admin_remove_product():
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Unauthorized: Only staff can delete products."}), 403
     data = request.get_json(force=True) or {}
     pid  = data.get("product_id", "").strip()
     if not pid: return jsonify({"success": False, "error": "product_id is required"}), 400
@@ -553,17 +539,28 @@ def api_admin_remove_product():
 @app.route("/api/admin/report/<report_type>")
 @login_required_admin
 def api_admin_report(report_type):
-    admin = get_current_user()
-    
-    # RBAC Enforcement: Only managers can request/compile reports from the Manager singleton
-    if admin.role != "manager":
-        return jsonify({"success": False, "error": "Unauthorized: Only managers can compile system reports."}), 403
-        
     if report_type not in {"inventory","orders","sales","feedback","support"}:
         return jsonify({"error": "Unknown report type"}), 400
         
-    report = admin.request_report(report_type)
-    return jsonify(report.to_dict())
+    admin = get_current_user()
+    mgr = Manager.get_instance()
+    
+    if admin.role == "manager":
+        # Managers can compile/generate a fresh, real-time report on demand
+        report = admin.request_report(report_type)
+        mgr.add_staff_notification(
+            f"📊 Manager ({admin.username}) has compiled the latest \"{report_type.upper()}\" report. You can now view the updated metrics!"
+        )
+        return jsonify(report.to_dict())
+    else:
+        # Standard staff can only view/request the latest compiled report from the Manager
+        report = mgr.get_latest_report(report_type)
+        if not report:
+            return jsonify({
+                "success": False, 
+                "error": "No report of this type has been compiled by the Manager yet. Standard staff cannot trigger new compilations."
+            }), 404
+        return jsonify(report.to_dict())
 
 @app.route("/api/admin/ticket/assign", methods=["POST"])
 @login_required_admin
@@ -611,6 +608,11 @@ def api_admin_resolve_ticket():
     if not tid:   return jsonify({"success": False, "error": "ticket_id is required"}), 400
     if not notes: return jsonify({"success": False, "error": "Resolution notes cannot be blank"}), 400
     
+    # Role Enforcement: Only operational staff can resolve tickets
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Unauthorized: Only store staff can resolve support tickets."}), 403
+        
     store  = get_store()
     ticket = None
     for acc in store["accounts"].values():
@@ -619,11 +621,6 @@ def api_admin_resolve_ticket():
             if ticket: break
     if not ticket: 
         return jsonify({"success": False, "error": "Ticket not found"}), 404
-        
-    # Role Enforcement: A staff member can only resolve if assigned directly to them
-    admin = get_current_user()
-    if admin.role == "staff" and (not ticket.assigned_to or ticket.assigned_to.account_id != admin.account_id):
-        return jsonify({"success": False, "error": "Unauthorized: You cannot resolve a ticket that is not assigned to you."}), 403
         
     ticket.resolve(notes)
     return jsonify({"success": True, "ticket": ticket.to_dict()})
@@ -647,6 +644,8 @@ def api_create_ticket():
     if not desc:    return jsonify({"success": False, "error": "Description cannot be blank"}), 400
     customer = get_current_user(); mgr = Manager.get_instance()
     ticket   = customer.raise_support_ticket(subject, desc)
+    # Trigger Staff Notification
+    mgr.add_staff_notification(f"🎫 New Support Ticket raised by {customer.username}: \"{subject}\"")
     if oid:
         order = next((o for o in mgr.orders if o.order_id == oid), None)
         if order: ticket.order = order; order.support_tickets.append(ticket)
@@ -671,6 +670,8 @@ def api_submit_feedback():
     if not order:    return jsonify({"success": False, "error": "Order not found"}), 404
     if order.feedback: return jsonify({"success": False, "error": "Feedback already submitted"}), 409
     fb = order.receive_feedback(rating, comment)
+     # Trigger Staff Notification
+    mgr.add_staff_notification(f"⭐ New Review submitted by {customer.username}! Rating: {rating}/5")
     customer.feedback_list.append(fb)
     return jsonify({"success": True, "feedback": fb.to_dict()}), 201
 
@@ -898,6 +899,9 @@ def api_delete_address():
 @app.route("/api/admin/order/accept", methods=["POST"])
 @login_required_admin
 def api_admin_accept_order():
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Unauthorized: Only staff can accept orders."}), 403
     data = request.get_json(force=True) or {}
     order_id = data.get("order_id", "").strip()
     mgr = Manager.get_instance()
@@ -916,6 +920,9 @@ def api_admin_accept_order():
 @app.route("/api/admin/order/ship", methods=["POST"])
 @login_required_admin
 def api_admin_ship_order():
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Unauthorized: Only staff can ship orders."}), 403
     data = request.get_json(force=True) or {}
     order_id = data.get("order_id", "").strip()
     carrier = data.get("carrier", "SnackExpress").strip()
@@ -948,6 +955,9 @@ def api_admin_ship_order():
 @app.route("/api/admin/order/deliver", methods=["POST"])
 @login_required_admin
 def api_admin_deliver_order():
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Unauthorized: Only staff can deliver orders."}), 403
     data = request.get_json(force=True) or {}
     order_id = data.get("order_id", "").strip()
     mgr = Manager.get_instance()
@@ -969,6 +979,9 @@ def api_admin_deliver_order():
 @app.route("/api/admin/order/cancel", methods=["POST"])
 @login_required_admin
 def api_admin_cancel_order():
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Unauthorized: Only staff can cancel orders."}), 403
     data = request.get_json(force=True) or {}
     order_id = data.get("order_id", "").strip()
     mgr = Manager.get_instance()
@@ -986,6 +999,9 @@ def api_admin_cancel_order():
 @app.route("/api/admin/order/refund", methods=["POST"])
 @login_required_admin
 def api_admin_refund_order():
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Unauthorized: Only staff can refund orders."}), 403
     data = request.get_json(force=True) or {}
     order_id = data.get("order_id", "").strip()
     mgr = Manager.get_instance()
@@ -1003,6 +1019,9 @@ def api_admin_refund_order():
 @app.route("/api/admin/product/toggle_active", methods=["POST"])
 @login_required_admin
 def api_admin_toggle_product_active():
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Unauthorized: Only staff can toggle product visibility."}), 403
     data = request.get_json(force=True) or {}
     pid  = data.get("product_id", "").strip()
     mgr  = Manager.get_instance()
@@ -1035,6 +1054,9 @@ def api_reopen_ticket():
 @app.route("/api/admin/category/add", methods=["POST"])
 @login_required_admin
 def api_admin_add_category():
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Unauthorized: Only staff can add categories."}), 403
     data = request.get_json(force=True) or {}
     name = data.get("name", "").strip()
     desc = data.get("description", "").strip()
@@ -1056,6 +1078,9 @@ def api_admin_add_category():
 @app.route("/api/admin/category/rename", methods=["POST"])
 @login_required_admin
 def api_admin_rename_category():
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Unauthorized: Only staff can rename categories."}), 403
     data = request.get_json(force=True) or {}
     cid  = data.get("category_id", "").strip()
     new_name = data.get("name", "").strip()
@@ -1076,6 +1101,9 @@ def api_admin_rename_category():
 @app.route("/api/admin/category/toggle_active", methods=["POST"])
 @login_required_admin
 def api_admin_toggle_category_active():
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Unauthorized: Only staff can toggle category visibility."}), 403
     data = request.get_json(force=True) or {}
     cid  = data.get("category_id", "").strip()
     if not cid:
@@ -1090,22 +1118,55 @@ def api_admin_toggle_category_active():
     cat.is_active = not cat.is_active
     return jsonify({"success": True, "category": cat.to_dict()})
 
-@app.route("/api/admin/alerts", methods=["GET"])
+@app.route("/api/admin/notifications", methods=["GET"])
 @login_required_admin
-def api_admin_get_alerts():
+def api_admin_get_notifications():
+    admin = get_current_user()
     mgr = Manager.get_instance()
-    # Return alerts reverse-sorted (newest first)
+    
+    # Return context-aware notifications based on active role (Manager vs Staff)
+    if admin.role == "manager":
+        notifs = mgr.manager_notifications[::-1]
+        unread = sum(1 for n in mgr.manager_notifications if not n["read"])
+    else:
+        notifs = mgr.staff_notifications[::-1]
+        unread = sum(1 for n in mgr.staff_notifications if not n["read"])
+        
     return jsonify({
-        "alerts": mgr.alerts[::-1],
-        "unread_count": sum(1 for a in mgr.alerts if not a["read"])
+        "notifications": notifs,
+        "unread_count": unread
     })
 
-@app.route("/api/admin/alerts/read", methods=["POST"])
+@app.route("/api/admin/notifications/read", methods=["POST"])
 @login_required_admin
-def api_admin_read_alerts():
+def api_admin_read_notifications():
+    admin = get_current_user()
     mgr = Manager.get_instance()
-    for a in mgr.alerts:
-        a["read"] = True
+    
+    if admin.role == "manager":
+        for n in mgr.manager_notifications:
+            n["read"] = True
+    else:
+        for n in mgr.staff_notifications:
+            n["read"] = True
+            
+    return jsonify({"success": True})
+
+@app.route("/api/admin/report/request", methods=["POST"])
+@login_required_admin
+def api_admin_request_report_notification():
+    admin = get_current_user()
+    if admin.role != "staff":
+        return jsonify({"success": False, "error": "Only operational staff can request latest reports."}), 403
+        
+    data = request.get_json(force=True) or {}
+    report_type = data.get("report_type", "").strip()
+    if not report_type:
+        return jsonify({"success": False, "error": "report_type is required"}), 400
+        
+    mgr = Manager.get_instance()
+    # Notify Manager of the staff request
+    mgr.add_manager_notification(f"📊 {admin.username} (staff) requested compiling the latest \"{report_type.upper()}\" report.")
     return jsonify({"success": True})
 
 @app.route("/api/customer/notifications", methods=["GET"])

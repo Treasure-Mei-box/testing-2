@@ -28,7 +28,9 @@ class Manager:
         self.products: List[Product] = []
         self.orders: List[Order] = []
         self.reports: List[Report] = []
-        self.alerts: List[dict] = []
+        # Centralized notification registries
+        self.staff_notifications: List[dict] = []
+        self.manager_notifications: List[dict] = []
 
     @classmethod
     def get_instance(cls) -> Manager:
@@ -39,6 +41,26 @@ class Manager:
     @classmethod
     def reset(cls):
         cls._instance = None
+
+    def add_staff_notification(self, message: str):
+        import uuid
+        from datetime import datetime
+        self.staff_notifications.append({
+            "id": str(uuid.uuid4())[:8].upper(),
+            "message": message,
+            "timestamp": datetime.now().strftime("%I:%M %p"),
+            "read": False
+        })
+
+    def add_manager_notification(self, message: str):
+        import uuid
+        from datetime import datetime
+        self.manager_notifications.append({
+            "id": str(uuid.uuid4())[:8].upper(),
+            "message": message,
+            "timestamp": datetime.now().strftime("%I:%M %p"),
+            "read": False
+        })
 
     def manage_product(self, product: Product):
         if not any(p.product_id == product.product_id for p in self.products):
@@ -187,6 +209,17 @@ class Manager:
             }
 
         return {"report_type": report_type, "data": "N/A"}
+    
+    # Add this method inside the Manager class
+    def get_latest_report(self, report_type: str) -> Optional[Report]:
+        """
+        Traverses compiled reports in reverse chronological order
+        to fetch the most recently generated instance of a given type.
+        """
+        for r in reversed(self.reports):
+            if r.report_type == report_type:
+                return r
+        return None
     
     def _orders_by_status(self) -> dict:
         result = {}

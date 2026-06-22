@@ -38,7 +38,6 @@ Software-Architecture-Assignment-3/
     ├── support.html          # Support Center (Ticket submission & Reopening)
     ├── profile.html          # Unified Profile Settings & Password Reset (Customer & Staff)
     ├── admin.html            # Operational Admin Panel (Orders lifecycle, Categories & Tickets)
-    └── admin_dashboard.html  # Manager Real-Time Analytical Charts Dashboard
 ```
 
 ## Quick start
@@ -76,6 +75,59 @@ python all_classes.py
 | POST   | /api/tickets             | New ticket: {subject, description} |
 | GET    | /api/manager             | Manager singleton state        |
 
+## API Endpoints
+Authentication & Session
+|Method	 | Path	                       | Description	                      | Access       |
+|--------|-----------------------------|--------------------------------------|--------------|
+|POST	 | /api/auth/login	           | Authenticate customer/admin sessions | Guest        |
+|POST	 | /api/auth/signup	           | Register new customer accounts       | Guest        |
+|POST	 | /api/profile/password/reset | Update account passwords	          | Authenticated|
+
+Shopping Cart & Addresses
+|Method	 | Path	                         | Description	                          | Access      |
+|--------|-------------------------------|----------------------------------------|-------------|
+|GET	 | /api/cart	                 | Retrieve current cart items & subtotals|	Customer    |
+|POST	 | /api/cart/add	             | Add product to cart	                  | Customer    |
+|POST	 | /api/cart/update	             | Update item quantity (validated)	      | Customer    |
+|POST	 | /api/cart/remove	             | Remove item from cart                  | Customer    |
+|POST	 | /api/customer/addresses/add   | Add address to profile list	          | Customer    |
+|POST	 | /api/customer/addresses/select| Set active address for shipping	      | Customer    |
+|POST	 | /api/customer/addresses/delete| Remove address from profile list	      | Customer    |
+
+Transaction Lifecycle
+|Method	 | Path	                       | Description	                       | Access       |
+|--------|-----------------------------|---------------------------------------|--------------|
+|POST	 | /api/cart/checkout	       | Convert cart contents to pending Order| Customer     |
+|POST	 | /api/payment/process   	   | Route payment and update order status | Customer     |
+
+Operational Administration
+|Method	 | Path	                            | Description	                             | Access       |
+|--------|----------------------------------|--------------------------------------------|--------------|
+|POST	 | /api/admin/product/add	        | Add new product to catalog	             | Admin(Staff) |
+|POST	 | /api/admin/product/restock	    | Replenish product stock level	             | Admin(Staff) |
+|POST	 | /api/admin/product/toggle_active | Toggle visibility of catalog item	         | Admin(Staff) |
+|POST	 | /api/admin/product/remove	    | Hard-delete product from catalog	         | Admin(Staff) |
+|POST	 | /api/admin/category/add	        | Create new product category	             | Admin(Staff) |
+|POST	 | /api/admin/category/rename	    | Rename category title	                     | Admin(Staff) |
+|POST	 | /api/admin/category/toggle_active| Toggle category activation	             | Admin(Staff) |
+|POST	 | /api/admin/order/accept	        | Accept order (pending →processing)         | Admin(Staff) |
+|POST	 | /api/admin/order/ship	        | Dispatch order (processing → shipped)      | Admin(Staff) |
+|POST	 | /api/admin/order/deliver	        | Mark order delivered (shipped → delivered) | Admin(Staff) |
+|POST	 | /api/admin/order/cancel	        | Cancel an active unpaid/pending order	     | Admin(Staff) |
+|POST	 | /api/admin/order/refund	        | Refund a cancelled paid order	             | Admin(Staff) |
+|POST	 | /api/admin/ticket/resolve	    | Resolve support ticket	                 | Admin(Staff) |
+
+Business Intelligence & Cooperation
+|Method	 | Path	                           | Description	                                  | Access       |
+|--------|---------------------------------|--------------------------------------------------|--------------|
+|GET	 | /api/admin/report/<type>	       | Compile inventory, sales, orders, or support data|	Manager      |
+|POST	 | /api/admin/report/request	   | Standard staff requests report compilation	      | Admin(Staff) |
+|GET	 | /api/admin/notifications	       | Fetch context-aware admin notifications	      | Admin        |
+|POST	 | /api/admin/notifications/read   | Mark admin notifications as read	              | Admin        |
+|GET	 | /api/customer/notifications	   | Fetch active order status notifications	      | Customer     |
+|POST	 | /api/customer/notifications/read| Mark customer notifications as read	          | Customer     |
+
+
 ## Using all_classes.py independently
 
 ```python
@@ -102,17 +154,39 @@ cat.add_product(Product("p1", "Clean Code", "...", 35.00, 10))
 | Composition | `Customer ◆── ShoppingCart` (cart deleted with customer) |
 | Aggregation | `Catalogue ◇── Category ◇── Product`          |
 
+## Heuristics Implemented
+| Heuristic                | Where                      |
+|--------------------------|----------------------------|
+| Heuristic 2.9 (Cohesion) | Product.reduce_stock       |        
+| Heuristic 5.1 (RBAC)     | app.py / admin.html        |
+
 ## Demo Account 
 Use these pre-seeded accounts to log in and test different user roles across the platform:
 | Role	              | Email Address	  | Password   | Description / Permissions               |
 |---------------------|-------------------|------------|-----------------------------------------|
-| Customer (Shopper)  | alex@acemart.com  |	pw123	   | Can shop, manage cart/addresses, pay,   |
-|                     |                   |            | view invoices, raise tickets, and       |
-|                     |                   |            | leave feedback.                         |
-| Manager (Admin)     |	sam@acemart.com	  | admin123   | Full access, including the real-time    |
-|                     |                   |            | visual charts dashboard, report         | 
-|                     |                   |            | generation, and support ticket          |
-|                     |                   |            | assignment.                             |
-| Staff (Admin)	      | lee@acemart.com	  | staff123   | Operational access to manage products,  |
-|                     |                   |            | restock, transition orders, and resolve |
-|                     |                   |            | assigned tickets.                       |
+| Customer (Shopper)  | alex@acemart.com  |	pw123	   | Can shop, manage cart/addresses, pay, view invoices, raise tickets, and leave feedback.|
+| Manager (Admin)     |	sam@acemart.com	  | admin123   | Full access, including the real-time visual charts dashboard, report generation, and support ticket assignment. |
+| Staff (Admin)	      | lee@acemart.com	  | staff123   | Operational access to manage products, restock, transition orders, and resolve assigned tickets. |
+
+## Role Positions & Features
+Shopper (Customer)
+- Authenticated Portal: Isolated login view with a self-service password-reset interface inside profile settings.
+- Shopping Cart & Checkout: Manual quantity entry capped at maximum available inventory, and multi-address management (add, edit, select, or delete).
+- Payment Processing: Modal simulation for credit cards and e-wallets, incorporating success, decline, and re-attempt routines.
+- In-App Notifications: Real-time alerts displayed through a navigation header bell dropdown whenever order statuses are updated.
+- Orders & Invoices: Interactive order ledger showing items and tracking details, with a printable, paper-style invoice showing custom payment methods.
+- Support & Feedback: Submit support tickets, reopen resolved inquiries (CRC 4.17), and leave reviews once order delivery is confirmed.
+
+Store Staff (Admin)
+- Isolated Portal: Access via ?mode=staff, with standard shopper options hidden.
+- Product Management: Create new catalog entries, hard-delete, or soft-delete produc (toggling visible/hidden status) to protect transactional records.
+- Category Administration (CRC 4.7): Create, rename, or toggle category visibility.
+- Manual Inventory Restocking: Replenish stock on-demand, with status badges updating on the UI.
+- Order Transition Operations: Move orders manually through the status lifecycle  (Accept → Ship → Deliver → Cancel → Refund).
+- Support Ticket Resolutions: Resolve customer support tickets directly on demand.
+- Real-time Notifications: Real-time bell dropdown notifications showing new orders, low-stock warnings (≤10 units), new tickets, and reviews.
+
+Manager (Admin + Elevated Privileges)
+- Consolidated Dashboard: Real-time visual metrics showing 5 custom Chart.js charts covering inventory, sales, orders, feedback, and support upon login.
+- Reports compilation: Compiles reports on inventory turnover ratios, category revenues, and top-selling product rankings.
+- Staff Reports Request Loop: Receives real-time notifications when staff requests a report. Automatically notifies staff once a report is compiled.

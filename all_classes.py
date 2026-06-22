@@ -155,7 +155,9 @@ class Manager:
         self.products: List[Product] = []
         self.orders: List[Order] = []
         self.reports: List[Report] = []
-        self.alerts: List[dict] = []  # <-- Initialize alerts list
+        # Centralized notification registries
+        self.staff_notifications: List[dict] = []
+        self.manager_notifications: List[dict] = []
 
     @classmethod
     def get_instance(cls) -> Manager:
@@ -165,6 +167,26 @@ class Manager:
 
     @classmethod
     def reset(cls): cls._instance = None
+
+    def add_staff_notification(self, message: str):
+        import uuid
+        from datetime import datetime
+        self.staff_notifications.append({
+            "id": str(uuid.uuid4())[:8].upper(),
+            "message": message,
+            "timestamp": datetime.now().strftime("%I:%M %p"),
+            "read": False
+        })
+
+    def add_manager_notification(self, message: str):
+        import uuid
+        from datetime import datetime
+        self.manager_notifications.append({
+            "id": str(uuid.uuid4())[:8].upper(),
+            "message": message,
+            "timestamp": datetime.now().strftime("%I:%M %p"),
+            "read": False
+        })
 
     def manage_product(self, p: Product):
         if not any(x.product_id == p.product_id for x in self.products):
@@ -289,6 +311,17 @@ class Manager:
         r = Report(str(uuid.uuid4()), report_type, datetime.now(), data, requested_by)
         self.reports.append(r)
         return r
+    
+    # Add this method inside the Manager class
+    def get_latest_report(self, report_type: str) -> Optional[Report]:
+        """
+        Traverses compiled reports in reverse chronological order
+        to fetch the most recently generated instance of a given type.
+        """
+        for r in reversed(self.reports):
+            if r.report_type == report_type:
+                return r
+        return None
 
     def to_dict(self):
         return {"products": len(self.products), "orders": len(self.orders),
@@ -334,30 +367,20 @@ class Product:
 
     def is_available(self): return self.stock_quantity > 0
 
-    def reduce_stock(self, qty):
-        if self.stock_quantity >= qty:
-            self.stock_quantity -= qty
+    def reduce_stock(self, quantity: int) -> bool:
+        if self.stock_quantity >= quantity:
+            self.stock_quantity -= quantity
             
-            # Low stock warning
+            # Low Stock Alert Check: Trigger staff notification if stock falls to 10 or fewer units (CRC 4.6)
             if self.stock_quantity <= 10:
-                import uuid  # Standard library imports are fine
-                
-                # Simply reference Manager directly since it is in the same file
                 mgr = Manager.get_instance()
                 
-                if not any(a.get("product_id") == self.product_id and not a.get("read") for a in mgr.alerts):
-                    mgr.alerts.append({
-                        "alert_id": str(uuid.uuid4())[:8].upper(),
-                        "product_id": self.product_id,
-                        "name": self.name,
-                        "image_url": self.image_url,
-                        "stock_quantity": self.stock_quantity,
-                        "timestamp": datetime.now().strftime("%I:%M %p"),
-                        "read": False
-                    })
+                # Check to avoid duplicates
+                warning_msg = f"⚠ Stock Warning: {self.image_url} {self.name} is running low! Only {self.stock_quantity} left."
+                if not any(warning_msg in n["message"] and not n["read"] for n in mgr.staff_notifications):
+                    mgr.add_staff_notification(warning_msg)
             return True
         return False
-
     def restock(self, qty): self.stock_quantity += qty
 
     def apply_discount(self, pct): return round(self.price * (1 - pct / 100), 2)

@@ -2,6 +2,7 @@
 Product model - managed by Admin/Manager, contained in Catalogue and Category.
 """
 from typing import List, Optional
+from .manager import Manager
 
 
 class Product:
@@ -25,24 +26,14 @@ class Product:
         if self.stock_quantity >= quantity:
             self.stock_quantity -= quantity
             
-            # Low Stock Alert Check: Trigger warning if stock falls to 5 or fewer units (CRC 4.6)
+            # Low Stock Alert Check: Trigger staff notification if stock falls to 10 or fewer units (CRC 4.6)
             if self.stock_quantity <= 10:
-                from .manager import Manager
-                import uuid
-                from datetime import datetime
                 mgr = Manager.get_instance()
                 
-                # Avoid flooding: check if there is already an active unread alert for this product
-                if not any(a.get("product_id") == self.product_id and not a.get("read") for a in mgr.alerts):
-                    mgr.alerts.append({
-                        "alert_id": str(uuid.uuid4())[:8].upper(),
-                        "product_id": self.product_id,
-                        "name": self.name,
-                        "image_url": self.image_url,
-                        "stock_quantity": self.stock_quantity,
-                        "timestamp": datetime.now().strftime("%I:%M %p"),
-                        "read": False
-                    })
+                # Check to avoid duplicates
+                warning_msg = f"⚠ Stock Warning: {self.image_url} {self.name} is running low! Only {self.stock_quantity} left."
+                if not any(warning_msg in n["message"] and not n["read"] for n in mgr.staff_notifications):
+                    mgr.add_staff_notification(warning_msg)
             return True
         return False
 

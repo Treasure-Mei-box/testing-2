@@ -212,19 +212,19 @@ nav{
   <div class="nav-right">
     <a class="nav-link" href="/" style="font-weight:700;color:var(--orange);border:2px solid var(--border);padding:.5rem 1rem;border-radius:99px;">🛍️ Customer View</a>
     <a class="nav-link" href="/profile">👤 Profile</a>
-    <!-- Real-time Low-Stock Notification Bell -->
+    <!-- Real-time Context-Aware Notification Bell -->
     <div style="position:relative;cursor:pointer;margin-right:1rem;" id="bell-wrapper">
       <span style="font-size:1.4rem;" onclick="toggleAlertsDropdown(event)">🔔</span>
-      <span id="alert-count-badge" style="display:none;position:absolute;top:-4px;right:-6px;background:var(--red);color:#fff;font-size:.65rem;font-weight:700;border-radius:99px;padding:.1rem .35rem;min-width:18px;text-align:center;" onclick="toggleAlertsDropdown(event)">0</span>
+      <span id="admin-notif-badge" style="display:none;position:absolute;top:-4px;right:-6px;background:var(--red);color:#fff;font-size:.65rem;font-weight:700;border-radius:99px;padding:.1rem .35rem;min-width:18px;text-align:center;" onclick="toggleAlertsDropdown(event)">0</span>
       
       <!-- Notification Dropdown Menu -->
-      <div id="alert-dropdown" style="display:none;position:absolute;top:38px;right:0;width:300px;background:var(--surface);border:2px solid var(--border);border-radius:12px;box-shadow:var(--shadow);z-index:150;padding:.75rem 1rem;">
+      <div id="admin-notif-dropdown" style="display:none;position:absolute;top:38px;right:0;width:300px;background:var(--surface);border:2px solid var(--border);border-radius:12px;box-shadow:var(--shadow);z-index:150;padding:.75rem 1rem;">
         <div style="font-family:'Righteous',cursive;font-size:.95rem;margin-bottom:.5rem;display:flex;justify-content:space-between;align-items:center;">
-          <span>⚠️ Low Stock Alerts</span>
+          <span id="notif-title-lbl">🔔 Notifications</span>
           <button style="background:none;border:none;color:var(--orange);font-size:.72rem;font-weight:700;cursor:pointer;" onclick="markAlertsAsRead(event)">Mark all read</button>
         </div>
-        <div id="alert-items-list" style="max-height:220px;overflow-y:auto;font-size:.82rem;display:flex;flex-direction:column;gap:.35rem;">
-          <div style="color:var(--muted);text-align:center;padding:1rem 0;">No active alerts.</div>
+        <div id="admin-notif-list" style="max-height:220px;overflow-y:auto;font-size:.82rem;display:flex;flex-direction:column;gap:.35rem;">
+          <div style="color:var(--muted);text-align:center;padding:1rem 0;">No active notifications.</div>
         </div>
       </div>
     </div>
@@ -281,140 +281,178 @@ nav{
     </div>
 
   <!-- Tabs -->
+  <!-- Tabs (Exposed to both roles) -->
   <div class="tabs">
     <button class="tab active" onclick="switchTab('products',this)">📦 Products</button>
     <button class="tab" onclick="switchTab('orders',this)">🧾 Orders</button>
     <button class="tab" onclick="switchTab('tickets',this)">🎫 Support Tickets</button>
     <button class="tab" onclick="switchTab('feedback',this)">⭐ Feedback</button>
-    
-    <!-- Only display the Reports tab link if the user is a manager -->
-    {% if admin.role == 'manager' %}
     <button class="tab" onclick="switchTab('reports',this)">📊 Reports</button>
-    {% endif %}
   </div>
 
   <!-- ── PRODUCTS TAB ── -->
   <div class="tab-panel active" id="tab-products">
 
-    <!-- Add Product Form -->
-    <div class="card" style="margin-bottom:1.5rem;">
-      <div class="card-title">➕ Add New Product</div>
-      <div class="form-grid" id="add-product-form">
-        <div class="form-group">
-          <label>Product Name *</label>
-          <input type="text" id="p-name" placeholder="e.g. Matcha Kit Kats"/>
-          <span class="error-msg" id="err-name">Name cannot be blank</span>
+    <!-- ── 1. OPERATIONAL CONTROL FOR STORE STAFF ── -->
+    {% if admin.role == 'staff' %}
+      <!-- Card A: Add Product Form -->
+      <div class="card" style="margin-bottom:1.5rem;">
+        <div class="card-title">➕ Add New Product</div>
+        <div class="form-grid" id="add-product-form">
+          <div class="form-group">
+            <label>Product Name *</label>
+            <input type="text" id="p-name" placeholder="e.g. Matcha Kit Kats"/>
+            <span class="error-msg" id="err-name">Name cannot be blank</span>
+          </div>
+          <div class="form-group">
+            <label>Emoji / Icon</label>
+            <input type="text" id="p-emoji" placeholder="🍫" maxlength="4"/>
+          </div>
+          <div class="form-group full">
+            <label>Description</label>
+            <input type="text" id="p-desc" placeholder="Short product description"/>
+          </div>
+          <div class="form-group">
+            <label>Price (AUD) *</label>
+            <input type="number" id="p-price" placeholder="4.99" min="0.01" step="0.01"/>
+            <span class="error-msg" id="err-price">Price must be greater than 0</span>
+          </div>
+          <div class="form-group">
+            <label>Stock Quantity *</label>
+            <input type="number" id="p-stock" placeholder="50" min="0"/>
+            <span class="error-msg" id="err-stock">Stock must be 0 or more</span>
+          </div>
+          <div class="form-group">
+            <label>Category *</label>
+            <select id="p-category">
+              <option value="">— Select category —</option>
+              {% for cat in categories %}
+                {% if cat.is_active %}
+                <option value="{{ cat.category_id }}">{{ cat.name }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            <span class="error-msg" id="err-cat">Please select a category</span>
+          </div>
+          <div class="form-group" style="align-self:end;">
+            <button class="btn btn-primary" onclick="addProduct()">➕ Add Product</button>
+          </div>
         </div>
-        <div class="form-group">
-          <label>Emoji / Icon</label>
-          <input type="text" id="p-emoji" placeholder="🍫" maxlength="4"/>
+      </div>
+
+      <!-- Card B: Manage Categories (Editable) -->
+      <div class="card" style="margin-bottom:1.5rem;">
+        <div class="card-title">📁 Manage Categories</div>
+        
+        <div style="display:flex;gap:.5rem;margin-bottom:1.25rem;align-items:end;flex-wrap:wrap;">
+          <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0;">
+            <label>New Category Name *</label>
+            <input type="text" id="cat-name-input" placeholder="e.g. Beverages"/>
+          </div>
+          <div class="form-group" style="flex:1.5;min-width:250px;margin-bottom:0;">
+            <label>Category Description</label>
+            <input type="text" id="cat-desc-input" placeholder="Optional description…"/>
+          </div>
+          <button class="btn btn-primary" onclick="addCategory()">➕ Add Category</button>
         </div>
-        <div class="form-group full">
-          <label>Description</label>
-          <input type="text" id="p-desc" placeholder="Short product description"/>
-        </div>
-        <div class="form-group">
-          <label>Price (AUD) *</label>
-          <input type="number" id="p-price" placeholder="4.99" min="0.01" step="0.01"/>
-          <span class="error-msg" id="err-price">Price must be greater than 0</span>
-        </div>
-        <div class="form-group">
-          <label>Stock Quantity *</label>
-          <input type="number" id="p-stock" placeholder="50" min="0"/>
-          <span class="error-msg" id="err-stock">Stock must be 0 or more</span>
-        </div>
-        <div class="form-group">
-          <label>Category *</label>
-          <select id="p-category">
-            <option value="">— Select category —</option>
+
+        <table class="tbl" id="category-table">
+          <thead>
+            <tr>
+              <th>Category ID</th>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
             {% for cat in categories %}
-              <!-- Managers should only add products to active categories -->
-              {% if cat.is_active %}
-              <option value="{{ cat.category_id }}">{{ cat.name }}</option>
-              {% endif %}
+            <tr id="cat-row-{{ cat.category_id }}">
+              <td style="font-family:monospace;font-size:.78rem;">{{ cat.category_id }}</td>
+              <td>
+                <div style="display:flex;gap:.5rem;align-items:center;">
+                  <input type="text" id="cat-rename-{{ cat.category_id }}" value="{{ cat.name }}" style="padding:.25rem .5rem;font-size:.85rem;border:2px solid var(--border);border-radius:6px;width:160px;outline:none;"/>
+                  <button class="btn btn-sm btn-outline" onclick="renameCategory('{{ cat.category_id }}')">Rename</button>
+                </div>
+              </td>
+              <td id="cat-status-{{ cat.category_id }}">
+                {% if cat.is_active %}
+                  <span class="badge badge-green">Active</span>
+                {% else %}
+                  <span class="badge badge-muted">Inactive</span>
+                {% endif %}
+              </td>
+              <td>
+                <button class="btn btn-sm {% if cat.is_active %}btn-danger{% else %}btn-primary{% endif %}"
+                        id="cat-toggle-btn-{{ cat.category_id }}"
+                        onclick="toggleCategoryActive('{{ cat.category_id }}')">
+                  {% if cat.is_active %}Deactivate{% else %}Activate{% endif %}
+                </button>
+              </td>
+            </tr>
             {% endfor %}
-          </select>
-          <span class="error-msg" id="err-cat">Please select a category</span>
-        </div>
-        <div class="form-group" style="align-self:end;">
-          <button class="btn btn-primary" onclick="addProduct()">➕ Add Product</button>
-        </div>
+          </tbody>
+        </table>
       </div>
-    </div>
-
-    <!-- Manage Categories Card -->
-    <div class="card" style="margin-bottom:1.5rem;">
-      <div class="card-title">📁 Manage Categories</div>
       
-      <!-- Add Category Inline Form -->
-      <div style="display:flex;gap:.5rem;margin-bottom:1.25rem;align-items:end;flex-wrap:wrap;">
-        <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0;">
-          <label>New Category Name *</label>
-          <input type="text" id="cat-name-input" placeholder="e.g. Beverages"/>
-        </div>
-        <div class="form-group" style="flex:1.5;min-width:250px;margin-bottom:0;">
-          <label>Category Description</label>
-          <input type="text" id="cat-desc-input" placeholder="Optional description…"/>
-        </div>
-        <button class="btn btn-primary" onclick="addCategory()">➕ Add Category</button>
+    <!-- ── 2. READ-ONLY VIEW DIRECTORY FOR THE MANAGER ── -->
+    {% else %}
+      <!-- Card C: Category Directory -->
+      <div class="card" style="margin-bottom:1.5rem;">
+        <div class="card-title">📁 Category Directory</div>
+        <p style="color:var(--muted);font-size:.82rem;margin-bottom:1rem;">
+          Browsing active and deactivated classification groups in your product catalog.
+        </p>
+        <table class="tbl" style="font-size:.8rem;">
+          <thead>
+            <tr>
+              <th>Category ID</th>
+              <th>Category Name</th>
+              <th>Description</th>
+              <th>Products Contained</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cat in categories %}
+            <tr>
+              <td style="font-family:monospace;font-size:.78rem;">{{ cat.category_id }}</td>
+              <td><strong>{{ cat.name }}</strong></td>
+              <td style="color:var(--muted);">{{ cat.description if cat.description else 'No description provided' }}</td>
+              <td><strong>{{ cat.products|length }}</strong></td>
+              <td>
+                {% if cat.is_active %}
+                  <span class="badge badge-green">Active</span>
+                {% else %}
+                  <span class="badge badge-muted">Inactive</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
+    {% endif %}
 
-      <!-- Categories List Table -->
-      <table class="tbl" id="category-table">
-        <thead>
-          <tr>
-            <th>Category ID</th>
-            <th>Name</th>
-            <th>Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for cat in categories %}
-          <tr id="cat-row-{{ cat.category_id }}">
-            <td style="font-family:monospace;font-size:.78rem;">{{ cat.category_id }}</td>
-            <td>
-              <div style="display:flex;gap:.5rem;align-items:center;">
-                <input type="text" id="cat-rename-{{ cat.category_id }}" value="{{ cat.name }}" style="padding:.25rem .5rem;font-size:.85rem;border:2px solid var(--border);border-radius:6px;width:160px;outline:none;"/>
-                <button class="btn btn-sm btn-outline" onclick="renameCategory('{{ cat.category_id }}')">Rename</button>
-              </div>
-            </td>
-            <td id="cat-status-{{ cat.category_id }}">
-              {% if cat.is_active %}
-                <span class="badge badge-green">Active</span>
-              {% else %}
-                <span class="badge badge-muted">Inactive</span>
-              {% endif %}
-            </td>
-            <td>
-              <button class="btn btn-sm {% if cat.is_active %}btn-danger{% else %}btn-primary{% endif %}"
-                      id="cat-toggle-btn-{{ cat.category_id }}"
-                      onclick="toggleCategoryActive('{{ cat.category_id }}')">
-                {% if cat.is_active %}Deactivate{% else %}Activate{% endif %}
-              </button>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Product List -->
+    <!-- Product List Card -->
     <div class="card">
-      <div class="card-title">📦 All Products ({{ products|length }})</div>
-      <table class="tbl" id="product-table">
-        <thead>
-          <tr>
-            <th>Product</th>
-            <th>Category</th>
-            <th>Price</th>
-            <th>Stock</th>
-            <th>Status</th>
-            <th>Visibility</th>
-            <th>Restock</th>
-            <th>Action</th>
-          </tr>
-        </thead>
+        <div class="card-title">📦 All Products ({{ products|length }})</div>
+        <table class="tbl" id="product-table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Stock</th>
+              <th>Status</th>
+              <th>Visibility</th>
+              <!-- Completely wrap these two headers in the Staff check -->
+              {% if admin.role == 'staff' %}
+              <th>Restock</th>
+              <th>Action</th>
+              {% endif %}
+            </tr>
+          </thead>
         <tbody>
           {% for p in products %}
           <tr id="row-{{ p.product_id }}">
@@ -448,6 +486,8 @@ nav{
               {% endif %}
             </td>
             
+            <!-- Completely wrap the final two TDs inside the Staff check -->
+            {% if admin.role == 'staff' %}
             <td>
               <div class="restock-row">
                 <input type="number" id="rs-{{ p.product_id }}" value="10" min="1"/>
@@ -456,22 +496,16 @@ nav{
             </td>
             <td>
               <div style="display:flex; gap:.35rem;">
-                <!-- Hide / Show Soft-Delete Toggle -->
                 <button class="btn btn-sm {% if p.is_active %}btn-outline{% else %}btn-primary{% endif %}" 
-                        style="font-size: .75rem;"
+                        style="font-size: .75rem;" 
                         id="toggle-btn-{{ p.product_id }}" 
                         onclick="toggleProductActive('{{ p.product_id }}')">
                   {% if p.is_active %}Hide{% else %}Show{% endif %}
                 </button>
-                
-                <!-- Permanent Hard-Delete Button -->
-                <button class="btn btn-sm btn-danger" 
-                        style="font-size: .75rem;"
-                        onclick="removeProduct('{{ p.product_id }}', this)">
-                  Delete
-                </button>
+                <button class="btn btn-sm btn-danger" style="font-size: .75rem;" onclick="removeProduct('{{ p.product_id }}', this)">Delete</button>
               </div>
             </td>
+            {% endif %}
           </tr>
           {% endfor %}
         </tbody>
@@ -506,7 +540,9 @@ nav{
             <th>Status</th>
             <th>Paid</th>
             <th>Date</th>
-            <th>Actions</th>
+            {% if admin.role == 'staff' %}
+            <th>Actions</th>  <!-- Staff Only -->
+            {% endif %}
           </tr>
         </thead>
         <tbody>
@@ -541,6 +577,7 @@ nav{
             <td style="font-size:.78rem;color:var(--muted);">{{ o.placed_at.strftime('%d %b %Y') }}</td>
             
             <!-- Manual State Transitions Column -->
+             {% if admin.role == 'staff' %}
             <td>
               {% if o.status == 'pending' %}
                 <button class="btn btn-sm btn-primary" onclick="acceptOrder('{{ o.order_id }}')">💼 Accept</button>
@@ -557,6 +594,7 @@ nav{
                 <span style="color:var(--muted);font-size:.78rem;">Complete</span>
               {% endif %}
             </td>
+            {% endif %}
           </tr>
           {% endfor %}
         </tbody>
@@ -620,9 +658,11 @@ nav{
             <th>Customer</th>
             <th>Subject</th>
             <th>Status</th>
-            <th>Assigned To</th>
             <th>Date</th>
+            <!-- Exclude Actions header for Managers -->
+            {% if admin.role == 'staff' %}
             <th>Actions</th>
+            {% endif %}
           </tr>
         </thead>
         <tbody>
@@ -648,47 +688,18 @@ nav{
               </span>
             </td>
             
-            <!-- Clean Assignment Label -->
-            <td id="ticket-assigned-{{ t.ticket_id }}">
-              {% if t.assigned_to %}
-                <strong>{{ t.assigned_to.username }}</strong>
-                <div style="font-size:.72rem;color:var(--muted);">{{ t.assigned_to.role }}</div>
-              {% else %}
-                <span style="color:var(--muted);">Unassigned</span>
-              {% endif %}
-            </td>
-            
             <td style="font-size:.78rem;color:var(--muted);">{{ t.created_at.strftime('%d %b %Y') }}</td>
             
-            <!-- Conditional Actions by Role -->
+            <!-- Completely wrap the entire TD tag inside the Staff check -->
+            {% if admin.role == 'staff' %}
             <td>
-              <!-- Assignment Dropdown (Manager Only, for open tickets) -->
-              {% if admin.role == 'manager' and t.status == 'open' %}
-                <div style="display:flex;gap:.25rem;align-items:center;margin-bottom:.35rem;">
-                  <select id="assign-select-{{ t.ticket_id }}" style="padding:.25rem;font-size:.75rem;border:2px solid var(--border);border-radius:6px;outline:none;">
-                    {% for staff in staff_members %}
-                    <option value="{{ staff.account_id }}" {% if staff.account_id == admin.account_id %}selected{% endif %}>
-                      {{ staff.username }} ({{ staff.role }})
-                    </option>
-                    {% endfor %}
-                  </select>
-                  <button class="btn btn-sm btn-outline" onclick="assignTicket('{{ t.ticket_id }}')">Assign</button>
-                </div>
-              {% endif %}
-
-              <!-- Resolve Button Actions -->
-              {% if admin.role == 'manager' %}
-                <!-- Managers can resolve any unresolved ticket -->
-                {% if t.status in ['open', 'in_progress'] %}
-                  <button class="btn btn-sm btn-primary" onclick="openResolve('{{ t.ticket_id }}')">Resolve</button>
-                {% endif %}
+              {% if t.status in ['open', 'in_progress'] %}
+                <button class="btn btn-sm btn-primary" onclick="openResolve('{{ t.ticket_id }}')">Resolve</button>
               {% else %}
-                <!-- Staff can ONLY resolve if ticket is in_progress and assigned to them -->
-                {% if t.status == 'in_progress' and t.assigned_to and t.assigned_to.account_id == admin.account_id %}
-                  <button class="btn btn-sm btn-primary" onclick="openResolve('{{ t.ticket_id }}')">Resolve</button>
-                {% endif %}
+                <span style="color:var(--muted);font-size:.78rem;">Complete</span>
               {% endif %}
             </td>
+            {% endif %}
           </tr>
           {% endfor %}
         </tbody>
@@ -748,27 +759,78 @@ nav{
     </div>
   </div>
 
-  <!-- ── REPORTS TAB (MANAGER ONLY) ── -->
-  {% if admin.role == 'manager' %}
+  <!-- ── REPORTS TAB (STAFF & MANAGER INTERFACE) ── -->
   <div class="tab-panel" id="tab-reports">
     <div class="card">
-      <div class="card-title">📊 Generate Reports</div>
+      <div class="card-title">📊 Generated Reports</div>
+      
+      {% if admin.role == 'manager' %}
       <p style="color:var(--muted);font-size:.88rem;margin-bottom:1.25rem;">
-        Select a report type. Data is compiled via the Manager singleton and traverses Orders for financial and satisfaction metrics.
+        Select a report type to compile a fresh, real-time dataset from the system.
       </p>
-      <div style="display:flex;flex-wrap:wrap;gap:.75rem;margin-bottom:1rem;">
+      <!-- Active compilation buttons (Manager Only) -->
+      <div style="display:flex;flex-wrap:wrap;gap:.75rem;margin-bottom:1.25rem;">
         <button class="btn btn-primary" onclick="fetchReport('inventory')">📦 Inventory</button>
         <button class="btn btn-primary" onclick="fetchReport('sales')">💰 Sales</button>
         <button class="btn btn-primary" onclick="fetchReport('orders')">🧾 Orders</button>
         <button class="btn btn-primary" onclick="fetchReport('feedback')">⭐ Feedback</button>
         <button class="btn btn-primary" onclick="fetchReport('support')">🎫 Support</button>
       </div>
+      {% else %}
+      <p style="color:var(--muted);font-size:.88rem;margin-bottom:1.25rem;">
+        Request and view the latest system report compiled by the Manager.
+      </p>
+      <!-- View & Request Actions (Staff Only) -->
+      <div style="display:flex;flex-wrap:wrap;gap:.75rem;margin-bottom:1.25rem; width: 100%;">
+        <div style="display:flex; flex-direction:column; gap:.5rem; background:var(--bg); padding:1rem; border-radius:12px; width:100%; border:1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.5rem;">
+            <span>📦 Inventory Report</span>
+            <div style="display:flex; gap:.35rem;">
+              <button class="btn btn-sm btn-outline" onclick="fetchReport('inventory')">👁️ View</button>
+              <button class="btn btn-sm btn-primary" onclick="requestReportCompilation('inventory')">📣 Request Update</button>
+            </div>
+          </div>
+          
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.5rem; border-top: 1px dashed var(--border); padding-top:.5rem;">
+            <span>💰 Sales Report</span>
+            <div style="display:flex; gap:.35rem;">
+              <button class="btn btn-sm btn-outline" onclick="fetchReport('sales')">👁️ View</button>
+              <button class="btn btn-sm btn-primary" onclick="requestReportCompilation('sales')">📣 Request Update</button>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.5rem; border-top: 1px dashed var(--border); padding-top:.5rem;">
+            <span>🧾 Orders Report</span>
+            <div style="display:flex; gap:.35rem;">
+              <button class="btn btn-sm btn-outline" onclick="fetchReport('orders')">👁️ View</button>
+              <button class="btn btn-sm btn-primary" onclick="requestReportCompilation('orders')">📣 Request Update</button>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.5rem; border-top: 1px dashed var(--border); padding-top:.5rem;">
+            <span>⭐ Feedback Report</span>
+            <div style="display:flex; gap:.35rem;">
+              <button class="btn btn-sm btn-outline" onclick="fetchReport('feedback')">👁️ View</button>
+              <button class="btn btn-sm btn-primary" onclick="requestReportCompilation('feedback')">📣 Request Update</button>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.5rem; border-top: 1px dashed var(--border); padding-top:.5rem;">
+            <span>🎫 Support Report</span>
+            <div style="display:flex; gap:.35rem;">
+              <button class="btn btn-sm btn-outline" onclick="fetchReport('support')">👁️ View</button>
+              <button class="btn btn-sm btn-primary" onclick="requestReportCompilation('support')">📣 Request Update</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
       
       <!-- Label and Export Actions Toolbar -->
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem; flex-wrap:wrap; gap:.5rem;">
         <div id="report-label" style="font-size:.8rem;color:var(--muted); font-weight:700;"></div>
         
-        <!-- Export Action Buttons (hidden by default) -->
+        <!-- Restored Export Actions Toolbar for CSV & PDF Downloads -->
         <div id="report-actions-bar" style="display:none; gap:.5rem;">
           <button class="btn btn-sm btn-outline" onclick="exportActiveReportCSV()">📥 Export CSV</button>
           <button class="btn btn-sm btn-outline" onclick="window.print()">📄 Save PDF</button>
@@ -777,96 +839,102 @@ nav{
       
       <div id="report-container" class="report-box" style="font-family: inherit; white-space: normal; line-height: inherit; max-height: none;"></div>
     </div>
-  </div>
-  {% endif %}
 
 </div><!-- /page -->
 
 <div class="toast" id="toast"><span id="toast-msg"></span></div>
 
 <script>
-// ── Real-time Low-Stock Monitoring ──
-let lastUnreadCount = 0;
 // Active report tracking states
 let activeReportType = '';
 let activeReportData = null;
 
+// ── Real-time Role-Aware Notification Monitoring ──
+let lastNotifCount = 0;
+
 function toggleAlertsDropdown(event) {
   event.stopPropagation();
-  const dropdown = document.getElementById('alert-dropdown');
+  const dropdown = document.getElementById('admin-notif-dropdown');
   dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
 }
 
 // Close dropdown when clicking outside
 document.addEventListener('click', () => {
-  document.getElementById('alert-dropdown').style.display = 'none';
+  const dropdown = document.getElementById('admin-notif-dropdown');
+  if (dropdown) dropdown.style.display = 'none';
 });
 
 async function markAlertsAsRead(event) {
   event.stopPropagation();
-  const res = await fetch('/api/admin/alerts/read', { method: 'POST' });
+  const res = await fetch('/api/admin/notifications/read', { method: 'POST' });
   const data = await res.json();
   if (data.success) {
-    document.getElementById('alert-count-badge').style.display = 'none';
-    lastUnreadCount = 0;
-    fetchAlerts();
+    document.getElementById('admin-notif-badge').style.display = 'none';
+    lastNotifCount = 0;
+    fetchNotifications();
   }
 }
 
-async function fetchAlerts() {
+async function requestReportCompilation(type) {
+  const res = await fetch('/api/admin/report/request', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({report_type: type})
+  });
+  const data = await res.json();
+  if (data.success) {
+    showToast(`📣 Requested latest "${type.toUpperCase()}" compilation from Manager!`);
+  }
+}
+
+async function fetchNotifications() {
   try {
-    const res = await fetch('/api/admin/alerts');
+    const res = await fetch('/api/admin/notifications');
     const data = await res.json();
     
     // Update badge count
-    const badge = document.getElementById('alert-count-badge');
+    const badge = document.getElementById('admin-notif-badge');
     if (data.unread_count > 0) {
       badge.textContent = data.unread_count;
       badge.style.display = 'block';
       
       // Proactive push warning (Toast) if unread alert count increases
-      if (data.unread_count > lastUnreadCount) {
-        const newestAlert = data.alerts[0];
-        showToast(`⚠ Low Stock Warning: ${newestAlert.name} has only ${newestAlert.stock_quantity} left!`, true);
+      if (data.unread_count > lastNotifCount) {
+        const newestNotif = data.notifications[0];
+        showToast(newestNotif.message, newestNotif.message.includes('⚠'));
       }
     } else {
       badge.style.display = 'none';
     }
-    lastUnreadCount = data.unread_count;
+    lastNotifCount = data.unread_count;
 
     // Render alert list items
-    const list = document.getElementById('alert-items-list');
-    if (data.alerts.length > 0) {
+    const list = document.getElementById('admin-notif-list');
+    if (data.notifications.length > 0) {
       list.innerHTML = '';
-      data.alerts.forEach(alert => {
+      data.notifications.forEach(n => {
         const item = document.createElement('div');
         item.style.padding = '.5rem';
         item.style.borderRadius = '8px';
         item.style.border = '1px solid var(--border)';
-        item.style.background = alert.read ? 'transparent' : 'rgba(255,71,87,.03)';
+        item.style.background = n.read ? 'transparent' : 'rgba(255,107,43,.03)';
         item.innerHTML = `
-          <div style="display:flex;justify-content:space-between;font-weight:700;">
-            <span>${alert.image_url} ${alert.name}</span>
-            <span style="color:var(--red)">${alert.stock_quantity} left</span>
-          </div>
-          <div style="font-size:.72rem;color:var(--muted);margin-top:.2rem;display:flex;justify-content:space-between;">
-            <span>ID: ${alert.product_id}</span>
-            <span>${alert.timestamp}</span>
-          </div>
+          <div style="font-weight:700; line-height: 1.3;">${n.message}</div>
+          <div style="font-size:.68rem; color:var(--muted); text-align:right; margin-top:.25rem;">${n.timestamp}</div>
         `;
         list.appendChild(item);
       });
     } else {
-      list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:1rem 0;">No active alerts.</div>';
+      list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:1rem 0;">No active notifications.</div>';
     }
   } catch(e) {
-    console.error("Failed to check real-time stock alerts", e);
+    console.error("Failed to check real-time notifications", e);
   }
 }
 
-// Check for low-stock alerts immediately on startup and poll every 4 seconds
-fetchAlerts();
-setInterval(fetchAlerts, 4000);
+// Check for notifications immediately on startup and poll every 4 seconds
+fetchNotifications();
+setInterval(fetchNotifications, 4000);
+
 
 // Open/Close New Reviews Explanation Modal
 function openTurnoverInfoModal(event) {
@@ -1240,6 +1308,16 @@ async function fetchReport(type) {
   action_bar.style.display = 'none';
   
   const res  = await fetch(`/api/admin/report/${type}`);
+  
+  // Handle un-compiled (404) or unauthorized states gracefully for Staff
+  if (!res.ok) {
+    const errData = await res.json();
+    document.getElementById('report-label').textContent = `❌ ${type.toUpperCase()} REPORT`;
+    container.innerHTML = `<div style="text-align:center; padding:2rem; color:var(--red); font-weight:700; font-size:.85rem;">⚠️ ${errData.error}</div>`;
+    container.classList.add('show');
+    return;
+  }
+  
   const data = await res.json();
   
   activeReportType = type;
