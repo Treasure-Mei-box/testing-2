@@ -75,7 +75,6 @@ python all_classes.py
 | POST   | /api/tickets             | New ticket: {subject, description} |
 | GET    | /api/manager             | Manager singleton state        |
 
-## API Endpoints
 Authentication & Session
 |Method	 | Path	                       | Description	                      | Access       |
 |--------|-----------------------------|--------------------------------------|--------------|
