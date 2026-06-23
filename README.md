@@ -154,10 +154,10 @@ cat.add_product(Product("p1", "Clean Code", "...", 35.00, 10))
 | Aggregation | `Catalogue ◇── Category ◇── Product`          |
 
 ## Heuristics Implemented
-| Heuristic                | Where                      |
-|--------------------------|----------------------------|
-| Heuristic 2.9 (Cohesion) | Product.reduce_stock       |        
-| Heuristic 5.1 (RBAC)     | app.py / admin.html        |
+| Heuristic                | Where                        |
+|--------------------------|------------------------------|
+| Heuristic 2.9 (Cohesion) | `Product.reduce_stock`       |        
+| Heuristic 5.1 (RBAC)     | `app.py / admin.html`        |
 
 ## Demo Account 
 Use these pre-seeded accounts to log in and test different user roles across the platform:

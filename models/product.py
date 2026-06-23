@@ -1,6 +1,7 @@
 """
 Product model - managed by Admin/Manager, contained in Catalogue and Category.
 """
+
 from typing import List, Optional
 from .manager import Manager
 
