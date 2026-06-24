@@ -1346,7 +1346,8 @@ def api_admin_rename_category():
     if not cat:
         return jsonify({"success": False, "error": "Category not found"}), 404
         
-    cat.name = new_address = new_name
+    cat.name = new_name
+    # Removed manual save_state_to_db() to let @app.after_request handle it safely once
     return jsonify({"success": True, "category": cat.to_dict()})
 
 @app.route("/api/admin/category/toggle_active", methods=["POST"])
@@ -1367,6 +1368,7 @@ def api_admin_toggle_category_active():
         return jsonify({"success": False, "error": "Category not found"}), 404
         
     cat.is_active = not cat.is_active
+    # Removed manual save_state_to_db() to let @app.after_request handle it safely once
     return jsonify({"success": True, "category": cat.to_dict()})
 
 @app.route("/api/admin/notifications", methods=["GET"])

@@ -37,6 +37,7 @@ class Category:
             "name": self.name,
             "description": self.description,
             "product_count": len(self.products),
+            "is_active": self.is_active,
             "products": [p.to_dict() for p in self.products],
         }
 

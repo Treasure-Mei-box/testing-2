@@ -250,18 +250,11 @@ nav{
     <!-- ══ STAFF PANEL ══ -->
     <div class="panel" id="panel-staff">
 
-      <!-- Role selector -->
-      <div style="font-size:.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;
-                  letter-spacing:.05em;margin-bottom:.5rem;">Staff Role</div>
-      <div class="role-row" style="margin-bottom:1.25rem;">
-        <button class="role-pill active" id="role-manager" onclick="setRole('manager')">👔 Manager</button>
-        <button class="role-pill" id="role-staff" onclick="setRole('staff')">🏪 Store Staff</button>
-      </div>
-
-      <!-- Demo hint -->
+      <!-- Updated, clean Demo Credentials box listing both roles -->
       <div class="demo-box">
-        <strong>Demo staff account:</strong><br/>
-        Email: <code>sam@acemart.com</code> &nbsp; Password: <code>admin123</code>
+        <strong>Demo Credentials:</strong><br/>
+        👔 Manager: <code>sam@acemart.com</code> (admin123)<br/>
+        🏪 Store Staff: <code>lee@acemart.com</code> (staff123)
       </div>
 
       <div class="form-group">
@@ -284,7 +277,6 @@ nav{
 <script>
 let currentMode    = 'customer';
 let currentSubTab  = 'login';
-let selectedRole   = 'manager';
 
 // ── Mode switching (Customer / Staff) ──
 function setMode(mode) {
@@ -389,8 +381,9 @@ async function doStaffLogin() {
   if (!valid) return;
 
   const res  = await fetch('/api/auth/login', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({email, password: pw, role: 'admin', staff_role: selectedRole})
+    method: 'POST', 
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({email, password: pw, role: 'admin'}) // <-- Simplified payload
   });
   const data = await res.json();
   if (data.success) {

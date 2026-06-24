@@ -1025,28 +1025,53 @@ async function renameCategory(categoryId) {
   }
 }
 
+// Toggles category active status in real-time with strict type-safety
 async function toggleCategoryActive(categoryId) {
-  const res = await fetch('/api/admin/category/toggle_active', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({category_id: categoryId})
-  });
-  const data = await res.json();
-  if (data.success) {
-    const badge = document.getElementById('cat-status-' + categoryId);
-    const btn   = document.getElementById('cat-toggle-btn-' + categoryId);
-    if (data.category.is_active) {
-      badge.innerHTML = '<span class="badge badge-green">Active</span>';
-      btn.textContent = 'Deactivate';
-      btn.className = 'btn btn-sm btn-danger';
-      showToast('✓ Category activated!');
-    } else {
-      badge.innerHTML = '<span class="badge badge-muted">Inactive</span>';
-      btn.textContent = 'Activate';
-      btn.className = 'btn btn-sm btn-primary';
-      showToast('⏸ Category deactivated!');
+  try {
+    const res  = await fetch('/api/admin/category/toggle_active', {
+      method: 'POST', 
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({category_id: categoryId})
+    });
+    
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("Server returned an error:", errText);
+      showToast('❌ Server error. Please check your python console.', true);
+      return;
     }
-  } else {
-    showToast('❌ ' + data.error, true);
+    
+    const data = await res.json();
+    if (data.success) {
+      const badge = document.getElementById('cat-status-' + categoryId);
+      const btn   = document.getElementById('cat-toggle-btn-' + categoryId);
+      
+      // Defensive Type-Checking: support both boolean and stringified payloads
+      const isActive = (data.category.is_active === true || data.category.is_active === "true");
+      
+      if (isActive) {
+        badge.innerHTML = '<span class="badge badge-green">Active</span>';
+        btn.textContent = 'Deactivate';
+        
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-danger');
+        
+        showToast('✓ Category activated!');
+      } else {
+        badge.innerHTML = '<span class="badge badge-muted">Inactive</span>';
+        btn.textContent = 'Activate';
+        
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-primary');
+        
+        showToast('⏸ Category deactivated!');
+      }
+    } else {
+      showToast('❌ ' + data.error, true);
+    }
+  } catch (e) {
+    console.error("JavaScript execution crashed during category toggle:", e);
+    showToast('❌ Connection error. Please try again.', true);
   }
 }
 
