@@ -63,7 +63,7 @@ class Order:
 
     def add_shipment(self, shipment: Shipment):
         self.shipments.append(shipment)
-        self.update_status("shipped")
+        
 
     def receive_feedback(self, rating: int, comment: str) -> Feedback:
         from .feedback import Feedback

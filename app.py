@@ -81,7 +81,11 @@ def save_state_to_db():
         acc_dict["password_hash"] = acc.password_hash
         if isinstance(acc, Customer):
             acc_dict["addresses"] = acc.addresses
+            acc_dict["notifications"] = acc.notifications
             acc_dict["support_tickets"] = [t.to_dict() for t in acc.support_tickets]
+            # Serialize active shopping cart items
+            cart = acc.get_or_create_cart()
+            acc_dict["shopping_cart"] = cart.to_dict() if cart else None
         accounts_data.append(acc_dict)
         
     # 4. Serialize Orders (including nested payments & shipments)
@@ -169,6 +173,15 @@ def load_state_from_db() -> bool:
         else:
             acc = AccountFactory.create("customer", a_dict["username"], email, "dummy", phone=a_dict["phone"], address=a_dict["address"])
             acc.addresses = a_dict.get("addresses", [acc.address] if acc.address else [])
+            acc.notifications = a_dict.get("notifications", [])
+
+            cart_data = a_dict.get("shopping_cart")
+            if cart_data and "items" in cart_data:
+                cart = acc.get_or_create_cart()
+                for item_dict in cart_data["items"]:
+                    p = products.get(item_dict["product_id"])
+                    if p:
+                        cart.items[p.product_id] = CartItem(p, item_dict["quantity"])  # <-- Rebuild CartItem
             
         acc.account_id = a_dict["account_id"]
         acc.password_hash = a_dict["password_hash"]
@@ -209,7 +222,7 @@ def load_state_from_db() -> bool:
         for s_dict in o_dict.get("shipments", []):
             ship = Shipment(s_dict["shipment_id"], order, s_dict["carrier"], s_dict["tracking_number"], s_dict["destination_address"])
             ship.status = s_dict["status"]
-            order.add_shipment(ship)
+            order.shipments.append(ship)
             
         if o_dict.get("feedback"):
             f_dict = o_dict["feedback"]
@@ -256,7 +269,15 @@ def load_state_from_db() -> bool:
         except Exception:
             gen_time = datetime.now()
             
-        report = Report(r_dict["report_id"], r_dict["report_type"], gen_time, r_dict["data"], admin_acc)
+        # Parse start and end date boundaries safely (CRC 4.19)
+        try:
+            s_date = datetime.fromisoformat(r_dict["start_date"])
+            e_date = datetime.fromisoformat(r_dict["end_date"])
+        except Exception:
+            s_date = datetime(2000, 1, 1)
+            e_date = datetime.now()
+            
+        report = Report(r_dict["report_id"], r_dict["report_type"], gen_time, r_dict["data"], admin_acc, s_date, e_date)
         mgr.reports.append(report)
 
     catalogue = Catalogue("main", "ACE Mart Store")
@@ -793,15 +814,45 @@ def api_admin_report(report_type):
     if report_type not in {"inventory","orders","sales","feedback","support"}:
         return jsonify({"error": "Unknown report type"}), 400
         
+    period = request.args.get("period", "all").strip().lower()
+    compile_new = request.args.get("compile", "false").strip().lower() == "true"
+    
+    # Calculate period date boundaries dynamically (CRC 4.19)
+    from datetime import datetime, timedelta
+    end_date = datetime.now()
+    
+    if period == "day":
+        start_date = end_date - timedelta(days=1)
+    elif period == "week":
+        start_date = end_date - timedelta(days=7)
+    elif period == "month":
+        start_date = end_date - timedelta(days=30)
+    elif period == "year":
+        start_date = end_date - timedelta(days=365)
+    elif period == "ytd":
+        start_date = datetime(end_date.year, 1, 1)
+    else:
+        start_date = datetime(2000, 1, 1)  # All time
+        
     admin = get_current_user()
     mgr = Manager.get_instance()
     
     if admin.role == "manager":
-        # Managers can compile/generate a fresh, real-time report on demand
-        report = admin.request_report(report_type)
-        mgr.add_staff_notification(
-            f"📊 Manager ({admin.username}) has compiled the latest \"{report_type.upper()}\" report. You can now view the updated metrics!"
-        )
+        if compile_new:
+            # Compiles a brand new, fresh report version
+            report = mgr.create_report(report_type, requested_by=admin, start_date=start_date, end_date=end_date)
+            mgr.add_staff_notification(
+                f"📊 Manager ({admin.username}) has compiled the latest \"{report_type.upper()}\" ({period.upper()}) report. You can now view the updated metrics!"
+            )
+            save_state_to_db()
+        else:
+            # Just view/retrieve the latest compiled report from memory/database
+            report = mgr.get_latest_report(report_type)
+            if not report:
+                return jsonify({
+                    "success": False, 
+                    "error": "No report of this type has been compiled by the Manager yet. Click 'Compile New' to generate the first version."
+                }), 404
         return jsonify(report.to_dict())
     else:
         # Standard staff can only view/request the latest compiled report from the Manager
@@ -1239,10 +1290,18 @@ def api_admin_cancel_order():
     order = next((o for o in mgr.orders if o.order_id == order_id), None)
     if not order:
         return jsonify({"success": False, "error": "Order not found"}), 404
+        
+    if order.status in ("cancelled", "refunded"):
+        return jsonify({"success": False, "error": "Order is already cancelled or refunded"}), 400
+        
+    # Standard operational flow: Restores inventory stock level for each purchased item
+    for item in order.items:
+        item.product.restock(item.quantity)
+        
     order.update_status("cancelled")
     # Trigger Customer Notification
     order.customer.add_notification(
-        f"Your order #{order.order_id[:8].upper()} was cancelled.", 
+        f"Your order #{order.order_id[:8].upper()} was cancelled and stock has been returned to inventory.", 
         order.order_id
     )
     return jsonify({"success": True, "status": order.status})
@@ -1259,10 +1318,22 @@ def api_admin_refund_order():
     order = next((o for o in mgr.orders if o.order_id == order_id), None)
     if not order:
         return jsonify({"success": False, "error": "Order not found"}), 404
+        
+    if order.status == "refunded":
+        return jsonify({"success": False, "error": "Order is already refunded"}), 400
+    if order.status == "shipped":
+        return jsonify({"success": False, "error": "Cannot refund an order that has already been shipped. It must be delivered or cancelled first."}), 400
+        
+    # If transitioning directly to refunded (e.g., from delivered, bypassing the cancel step)
+    # we return stock to inventory. If transitioning from cancelled, stock was already returned.
+    if order.status != "cancelled":
+        for item in order.items:
+            item.product.restock(item.quantity)
+            
     order.update_status("refunded")
     # Trigger Customer Notification
     order.customer.add_notification(
-        f"Your order #{order.order_id[:8].upper()} has been refunded. 💰", 
+        f"Your order #{order.order_id[:8].upper()} has been refunded and stock returned to inventory. 💰", 
         order.order_id
     )
     return jsonify({"success": True, "status": order.status})
@@ -1323,7 +1394,11 @@ def api_admin_add_category():
         
     cat_id = "c-" + str(uuid.uuid4())[:6]
     new_cat = Category(cat_id, name, desc)
+    
+    # Register the new category in both the active catalogue AND the serialization dictionary
     catalogue.add_category(new_cat)
+    store["categories"][cat_id] = new_cat  # <-- Add this line
+    
     return jsonify({"success": True, "category": new_cat.to_dict()}), 201
 
 @app.route("/api/admin/category/rename", methods=["POST"])
@@ -1375,6 +1450,11 @@ def api_admin_toggle_category_active():
 @login_required_admin
 def api_admin_get_notifications():
     admin = get_current_user()
+    
+    # Defensive Check: If session is stale/None, return unauthorized instantly
+    if not admin:
+        return jsonify({"success": False, "error": "Session expired. Please log in again.", "login_required": True}), 401
+        
     mgr = Manager.get_instance()
     
     # Return context-aware notifications based on active role (Manager vs Staff)
@@ -1394,6 +1474,11 @@ def api_admin_get_notifications():
 @login_required_admin
 def api_admin_read_notifications():
     admin = get_current_user()
+    
+    # Defensive Check: If session is stale/None, return unauthorized instantly
+    if not admin:
+        return jsonify({"success": False, "error": "Session expired. Please log in again.", "login_required": True}), 401
+        
     mgr = Manager.get_instance()
     
     if admin.role == "manager":
@@ -1440,243 +1525,6 @@ def api_customer_read_notifications():
             n["read"] = True
     return jsonify({"success": True})
 
-
-
-# ── SQLITE STATE SYNC SYSTEM (Zero-Configuration SQL Database) ──
-
-def get_db_connection():
-    # Connects directly to a local project file. No server setup needed!
-    conn = sqlite3.connect("acemart.db")
-    conn.row_factory = sqlite3.Row  # Enables dictionary-like row indexing
-    return conn
-
-def init_db():
-    """Initializes the database schema inside acemart.db on startup."""
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS store_state (
-                state_key TEXT PRIMARY KEY,
-                state_value TEXT
-            )
-        """)
-        conn.commit()
-    finally:
-        conn.close()
-
-def save_state_to_db():
-    store = get_store()
-    if not store:
-        return
-        
-    mgr = Manager.get_instance()
-    
-    # 1. Serialize Products
-    products_data = [p.to_dict() for p in mgr.products]
-    
-    # 2. Serialize Categories
-    categories_data = [c.to_dict() for c in store["categories"].values()]
-    
-    # 3. Serialize Accounts (Customers and Admins)
-    accounts_data = []
-    for acc in store["accounts"].values():
-        acc_dict = acc.to_dict()
-        acc_dict["password_hash"] = acc.password_hash
-        if isinstance(acc, Customer):
-            acc_dict["addresses"] = acc.addresses
-            acc_dict["support_tickets"] = [t.to_dict() for t in acc.support_tickets]
-        accounts_data.append(acc_dict)
-        
-    # 4. Serialize Orders (including nested payments & shipments)
-    orders_data = []
-    for o in mgr.orders:
-        o_dict = o.to_dict()
-        o_dict["payments"] = [p.to_dict() for p in o.payments]
-        o_dict["shipments"] = [s.to_dict() for s in o.shipments]
-        o_dict["feedback"] = o.feedback.to_dict() if o.feedback else None
-        orders_data.append(o_dict)
-        
-    # 5. Serialize Notifications
-    alerts_data = {
-        "staff_notifications": mgr.staff_notifications,
-        "manager_notifications": mgr.manager_notifications
-    }
-    
-    # 6. Serialize Reports
-    reports_data = [r.to_dict() for r in mgr.reports]  # <-- Add this line
-    
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        sql = "INSERT OR REPLACE INTO store_state (state_key, state_value) VALUES (?, ?)"
-        cursor.execute(sql, ("products", json.dumps(products_data)))
-        cursor.execute(sql, ("categories", json.dumps(categories_data)))
-        cursor.execute(sql, ("accounts", json.dumps(accounts_data)))
-        cursor.execute(sql, ("orders", json.dumps(orders_data)))
-        cursor.execute(sql, ("alerts", json.dumps(alerts_data)))
-        cursor.execute(sql, ("reports", json.dumps(reports_data)))  # <-- Add this line
-        conn.commit()
-    except Exception as e:
-        print("Failed to save state to SQLite database:", e)
-    finally:
-        conn.close()
-
-def load_state_from_db() -> bool:
-    """Loads and reconstructs python object graphs from SQLite. Returns False if DB is empty."""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM store_state")
-        rows = cursor.fetchall()
-        conn.close()
-    except Exception as e:
-        print("Database read error:", e)
-        return False
-        
-    if not rows:
-        return False
-        
-    # Reconstruct dict from SQLite Rows
-    state = {row["state_key"]: json.loads(row["state_value"]) for row in rows}
-    
-    Manager.reset()
-    mgr = Manager.get_instance()
-    
-    # 1. Reconstruct Products
-    products = {}
-    for p_dict in state.get("products", []):
-        p = Product(p_dict["product_id"], p_dict["name"], p_dict["description"], p_dict["price"], p_dict["stock_quantity"])
-        p.image_url = p_dict["image_url"]
-        p.category_id = p_dict["category_id"]
-        p.is_active = p_dict.get("is_active", True)
-        mgr.manage_product(p)
-        products[p.product_id] = p
-        
-    # 2. Reconstruct Categories
-    categories = {}
-    for c_dict in state.get("categories", []):
-        c = Category(c_dict["category_id"], c_dict["name"], c_dict["description"])
-        c.is_active = c_dict.get("is_active", True)
-        for p_dict in c_dict.get("products", []):
-            p = products.get(p_dict["product_id"])
-            if p:
-                c.add_product(p)
-        categories[c.category_id] = c
-        
-    # 3. Reconstruct Accounts (Customers and Admins)
-    accounts = {}
-    for a_dict in state.get("accounts", []):
-        email = a_dict["email"]
-        if "role" in a_dict:
-            acc = AccountFactory.create("admin", a_dict["username"], email, "dummy", role=a_dict["role"])
-        else:
-            acc = AccountFactory.create("customer", a_dict["username"], email, "dummy", phone=a_dict["phone"], address=a_dict["address"])
-            acc.addresses = a_dict.get("addresses", [acc.address] if acc.address else [])
-            
-        acc.account_id = a_dict["account_id"]
-        acc.password_hash = a_dict["password_hash"]
-        accounts[email] = acc
-        
-    # 4. Reconstruct Orders, Invoices, Payments, Shipments, and Feedbacks
-    for o_dict in state.get("orders", []):
-        cust_email = next((email for email, acc in accounts.items() if acc.account_id == o_dict["customer_id"]), None)
-        customer = accounts.get(cust_email)
-        if not customer: continue
-        
-        order_items = []
-        for item_dict in o_dict["items"]:
-            p = products.get(item_dict["product_id"])
-            if p:
-                order_items.append(CartItem(p, item_dict["quantity"]))
-                
-        order = Order(o_dict["order_id"], customer, order_items)
-        order.status = o_dict["status"]
-        order.total_amount = o_dict["total_amount"]
-        
-        if o_dict.get("invoice_id"):
-            order.generate_invoice()
-            order.invoice.invoice_id = o_dict["invoice_id"]
-            order.invoice.is_paid = o_dict.get("is_paid", False)
-            
-        for p_dict in o_dict.get("payments", []):
-            gw_name = p_dict["gateway"]
-            if "CreditCard" in gw_name:
-                gw = CreditCardGateway(p_dict.get("card_masked", "****"), "00/00")
-            else:
-                gw = EWalletGateway("wallet", p_dict.get("provider", "TouchNGo"))
-            pmt = Payment(p_dict["payment_id"], order, p_dict["amount"], gw)
-            pmt.status = p_dict["status"]
-            pmt.transaction_id = p_dict.get("transaction_id")
-            order.add_payment(pmt)
-            
-        for s_dict in o_dict.get("shipments", []):
-            ship = Shipment(s_dict["shipment_id"], order, s_dict["carrier"], s_dict["tracking_number"], s_dict["destination_address"])
-            ship.status = s_dict["status"]
-            order.add_shipment(ship)
-            
-        if o_dict.get("feedback"):
-            f_dict = o_dict["feedback"]
-            order.receive_feedback(f_dict["rating"], f_dict["comment"])
-            order.feedback.feedback_id = f_dict["feedback_id"]
-            customer.feedback_list.append(order.feedback)
-            
-        customer.orders.append(order)
-        mgr.orders.append(order)
-        
-    # 5. Reconstruct Support Tickets
-    for a_dict in state.get("accounts", []):
-        email = a_dict["email"]
-        customer = accounts.get(email)
-        if not customer: continue
-        for t_dict in a_dict.get("support_tickets", []):
-            ticket = customer.raise_support_ticket(t_dict["subject"], t_dict["description"])
-            ticket.ticket_id = t_dict["ticket_id"]
-            ticket.status = t_dict["status"]
-            ticket.resolution_notes = t_dict.get("resolution_notes", "")
-            if t_dict.get("assigned_to"):
-                admin_email = next((email for email, acc in accounts.items() if acc.username == t_dict["assigned_to"]), None)
-                admin_acc = accounts.get(admin_email)
-                if admin_acc:
-                    ticket.assign(admin_acc)
-            if t_dict.get("order_id"):
-                order = next((o for o in mgr.orders if o.order_id == t_dict["order_id"]), None)
-                if order:
-                    ticket.order = order
-                    order.support_tickets.append(ticket)
-                    
-    # 6. Reconstruct Notifications
-    alerts_data = state.get("alerts", {})
-    mgr.staff_notifications = alerts_data.get("staff_notifications", [])
-    mgr.manager_notifications = alerts_data.get("manager_notifications", [])
-    
-    # 7. Reconstruct Reports
-    for r_dict in state.get("reports", []):
-        admin_name = r_dict.get("requested_by")
-        # Find the Admin who compiled this report
-        admin_acc = next((acc for acc in accounts.values() if acc.username == admin_name), None)
-        try:
-            gen_time = datetime.fromisoformat(r_dict["generated_at"])
-        except Exception:
-            gen_time = datetime.now()
-            
-        report = Report(r_dict["report_id"], r_dict["report_type"], gen_time, r_dict["data"], admin_acc)
-        mgr.reports.append(report)
-        
-    catalogue = Catalogue("main", "ACE Mart Store")
-    for cat in categories.values():
-        catalogue.add_category(cat)
-        
-    app.config["STORE"] = {
-        "catalogue":  catalogue,
-        "customer":   accounts.get("alex@acemart.com"),
-        "admin":      accounts.get("sam@acemart.com"),
-        "staff":      accounts.get("lee@acemart.com"),
-        "products":   products,
-        "categories": categories,
-        "accounts":   accounts,
-    }
-    return True
 
 # ── Entry Point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":

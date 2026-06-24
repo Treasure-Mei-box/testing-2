@@ -587,7 +587,6 @@ nav{
                 <button class="btn btn-sm btn-danger" onclick="cancelOrder('{{ o.order_id }}')">Cancel</button>
               {% elif o.status == 'shipped' %}
                 <button class="btn btn-sm btn-primary" style="background:var(--green);" onclick="deliverOrder('{{ o.order_id }}')">✅ Deliver</button>
-                <button class="btn btn-sm btn-danger" onclick="refundOrder('{{ o.order_id }}')">Refund</button>
               {% elif o.status == 'cancelled' and o.is_paid() %}
                 <button class="btn btn-sm btn-danger" style="background:var(--red); color:#fff;" onclick="refundOrder('{{ o.order_id }}')">💰 Refund</button>
               {% else %}
@@ -766,16 +765,101 @@ nav{
       
       {% if admin.role == 'manager' %}
       <p style="color:var(--muted);font-size:.88rem;margin-bottom:1.25rem;">
-        Select a report type to compile a fresh, real-time dataset from the system.
+        Configure the period directly on each row, then view the latest version or compile a new one.
       </p>
-      <!-- Active compilation buttons (Manager Only) -->
-      <div style="display:flex;flex-wrap:wrap;gap:.75rem;margin-bottom:1.25rem;">
-        <button class="btn btn-primary" onclick="fetchReport('inventory')">📦 Inventory</button>
-        <button class="btn btn-primary" onclick="fetchReport('sales')">💰 Sales</button>
-        <button class="btn btn-primary" onclick="fetchReport('orders')">🧾 Orders</button>
-        <button class="btn btn-primary" onclick="fetchReport('feedback')">⭐ Feedback</button>
-        <button class="btn btn-primary" onclick="fetchReport('support')">🎫 Support</button>
-      </div>
+
+      <!-- Row-Level Action Table (Manager Only) -->
+      <table class="tbl" style="font-size:.85rem; margin-bottom: 1.5rem; max-width: 720px;">
+        <thead>
+          <tr>
+            <th>Report Type</th>
+            <th>Choose Period</th> <!-- Dropdown column -->
+            <th style="text-align:right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>📦 Inventory Report</strong></td>
+            <td>
+              <select id="period-inventory" style="padding:.35rem .6rem; border:2px solid var(--border); border-radius:8px; font-family:inherit; font-size:.8rem; outline:none; background:var(--bg); color:var(--dark);">
+                <option value="all">🌟 All-Time</option>
+                <option value="day">🕐 Last 24 Hours</option>
+                <option value="week">📅 Last 7 Days</option>
+                <option value="month">📅 Last 30 Days</option>
+                <option value="year">📊 Last 365 Days</option>
+              </select>
+            </td>
+            <td style="text-align:right; display:flex; gap:.35rem; justify-content:end;">
+              <button class="btn btn-sm btn-outline" onclick="fetchReport('inventory', false)">👁️ View Latest</button>
+              <button class="btn btn-sm btn-primary" onclick="fetchReport('inventory', true)">➕ Compile New</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>💰 Sales Report</strong></td>
+            <td>
+              <select id="period-sales" style="padding:.35rem .6rem; border:2px solid var(--border); border-radius:8px; font-family:inherit; font-size:.8rem; outline:none; background:var(--bg); color:var(--dark);">
+                <option value="all">🌟 All-Time</option>
+                <option value="day">🕐 Last 24 Hours</option>
+                <option value="week" selected>📅 Last 7 Days</option>
+                <option value="month">📅 Last 30 Days</option>
+                <option value="year">📊 Last 365 Days</option>
+              </select>
+            </td>
+            <td style="text-align:right; display:flex; gap:.35rem; justify-content:end;">
+              <button class="btn btn-sm btn-outline" onclick="fetchReport('sales', false)">👁️ View Latest</button>
+              <button class="btn btn-sm btn-primary" onclick="fetchReport('sales', true)">➕ Compile New</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>🧾 Orders Report</strong></td>
+            <td>
+              <select id="period-orders" style="padding:.35rem .6rem; border:2px solid var(--border); border-radius:8px; font-family:inherit; font-size:.8rem; outline:none; background:var(--bg); color:var(--dark);">
+                <option value="all">🌟 All-Time</option>
+                <option value="day">🕐 Last 24 Hours</option>
+                <option value="week">📅 Last 7 Days</option>
+                <option value="month">📅 Last 30 Days</option>
+                <option value="year">📊 Last 365 Days</option>
+              </select>
+            </td>
+            <td style="text-align:right; display:flex; gap:.35rem; justify-content:end;">
+              <button class="btn btn-sm btn-outline" onclick="fetchReport('orders', false)">👁️ View Latest</button>
+              <button class="btn btn-sm btn-primary" onclick="fetchReport('orders', true)">➕ Compile New</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>⭐ Feedback Report</strong></td>
+            <td>
+              <select id="period-feedback" style="padding:.35rem .6rem; border:2px solid var(--border); border-radius:8px; font-family:inherit; font-size:.8rem; outline:none; background:var(--bg); color:var(--dark);">
+                <option value="all">🌟 All-Time</option>
+                <option value="day">🕐 Last 24 Hours</option>
+                <option value="week">📅 Last 7 Days</option>
+                <option value="month">📅 Last 30 Days</option>
+                <option value="year">📊 Last 365 Days</option>
+              </select>
+            </td>
+            <td style="text-align:right; display:flex; gap:.35rem; justify-content:end;">
+              <button class="btn btn-sm btn-outline" onclick="fetchReport('feedback', false)">👁️ View Latest</button>
+              <button class="btn btn-sm btn-primary" onclick="fetchReport('feedback', true)">➕ Compile New</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>🎫 Support Report</strong></td>
+            <td>
+              <select id="period-support" style="padding:.35rem .6rem; border:2px solid var(--border); border-radius:8px; font-family:inherit; font-size:.8rem; outline:none; background:var(--bg); color:var(--dark);">
+                <option value="all">🌟 All-Time</option>
+                <option value="day">🕐 Last 24 Hours</option>
+                <option value="week">📅 Last 7 Days</option>
+                <option value="month">📅 Last 30 Days</option>
+                <option value="year">📊 Last 365 Days</option>
+              </select>
+            </td>
+            <td style="text-align:right; display:flex; gap:.35rem; justify-content:end;">
+              <button class="btn btn-sm btn-outline" onclick="fetchReport('support', false)">👁️ View Latest</button>
+              <button class="btn btn-sm btn-primary" onclick="fetchReport('support', true)">➕ Compile New</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
       {% else %}
       <p style="color:var(--muted);font-size:.88rem;margin-bottom:1.25rem;">
         Request and view the latest system report compiled by the Manager.
@@ -862,6 +946,21 @@ function toggleAlertsDropdown(event) {
 document.addEventListener('click', () => {
   const dropdown = document.getElementById('admin-notif-dropdown');
   if (dropdown) dropdown.style.display = 'none';
+});
+
+// Automatically restore the active tab state on page loads / reloads
+document.addEventListener("DOMContentLoaded", () => {
+  const savedTab = localStorage.getItem('adminActiveTab');
+  if (savedTab && document.getElementById('tab-' + savedTab)) {
+    switchTab(savedTab, null);
+    
+    // Auto-load the last saved inventory report if the restored tab is Reports
+    if (savedTab === 'reports') {
+      fetchReport('inventory', false);
+    }
+  } else {
+    switchTab('products', null); // Default fallback
+  }
 });
 
 async function markAlertsAsRead(event) {
@@ -959,7 +1058,16 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  btn.classList.add('active');
+  if (btn) {
+    btn.classList.add('active');
+  } else {
+    // If called programmatically on load, locate the matching button element and highlight it
+    const targetBtn = Array.from(document.querySelectorAll('.tab')).find(b => b.getAttribute('onclick').includes(`'${name}'`));
+    if (targetBtn) targetBtn.classList.add('active');
+  }
+  
+  // Persist the active tab in browser storage through reloads
+  localStorage.setItem('adminActiveTab', name);
 }
 
 function showToast(msg, isError=false) {
@@ -1325,16 +1433,21 @@ async function submitResolve() {
 // ── Real-time Report Generation Dashboard ──
 
 // Fetches report data from backend API
-async function fetchReport(type) {
+async function fetchReport(type, compileNew = false) {
   document.getElementById('report-label').textContent = `Loading ${type} report…`;
   const container = document.getElementById('report-container');
   const action_bar = document.getElementById('report-actions-bar');
   container.classList.remove('show');
   action_bar.style.display = 'none';
   
-  const res  = await fetch(`/api/admin/report/${type}`);
+  // Read the row-level period dropdown selector specific to this report type
+  const periodSelector = document.getElementById('period-' + type);
+  const period = periodSelector ? periodSelector.value : 'all';
   
-  // Handle un-compiled (404) or unauthorized states gracefully for Staff
+  // Append both period and compile query parameters
+  const res  = await fetch(`/api/admin/report/${type}?period=${period}&compile=${compileNew}`);
+  
+  // Handle un-compiled (404) gracefully
   if (!res.ok) {
     const errData = await res.json();
     document.getElementById('report-label').textContent = `❌ ${type.toUpperCase()} REPORT`;
@@ -1352,7 +1465,9 @@ async function fetchReport(type) {
     ? data.generated_at.substring(0, 16).replace('T', ' ') 
     : new Date().toISOString().substring(0,16).replace('T', ' ');
     
-  document.getElementById('report-label').textContent = `📊 ${type.toUpperCase()} REPORT — generated ${dateStr}`;
+  const sDate = data.start_date.substring(0, 10);
+  const eDate = data.end_date.substring(0, 10);
+  document.getElementById('report-label').textContent = `📊 ${type.toUpperCase()} REPORT (${sDate} to ${eDate}) — generated ${dateStr}`;
   
   container.innerHTML = buildReportDashboard(type, data.data);
   container.classList.add('show');
@@ -1361,6 +1476,7 @@ async function fetchReport(type) {
   // Trigger Chart.js compiler
   renderReportChart(type, data.data);
 }
+
 
 // Compiles raw database JSON objects into clean, responsive HTML dashboards
 function buildReportDashboard(type, data) {

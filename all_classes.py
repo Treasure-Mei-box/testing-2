@@ -101,7 +101,7 @@ class Customer(Account):
 
     def to_dict(self):
         d = super().to_dict()
-        d.update({"phone": self.phone, "address": self.address,
+        d.update({"phone": self.phone, "address": self.address, "addresses": self.addresses,"notifications": self.notifications,
                   "order_count": len(self.orders),
                   "ticket_count": len(self.support_tickets)})
         return d
@@ -197,21 +197,27 @@ class Manager:
         self.orders.append(order)
         return True
 
-    def create_report(self, report_type: str, requested_by=None) -> Report:
+    def create_report(self, report_type: str, requested_by=None, start_date=None, end_date=None) -> Report:
         data = {}
         
-        # Helper: pre-calculate product sales velocities
+        # Resolve default date boundaries
+        s_date = start_date or datetime(2000, 1, 1)
+        e_date = end_date or datetime.now()
+        
+        # SQL-style filter: isolate orders strictly within the selected reporting period
+        period_orders = [o for o in self.orders if s_date <= o.placed_at <= e_date]
+        
+        # Pre-calculate active units sold & category breakdown for this period
         product_sales = {p.name: 0 for p in self.products}
         category_sales = {}
         total_units_sold = 0
         
-        for o in self.orders:
+        for o in period_orders:
             if o.is_paid():
                 for item in o.items:
                     product_sales[item.product.name] = product_sales.get(item.product.name, 0) + item.quantity
                     total_units_sold += item.quantity
                     
-                    # Group by Category ID
                     cat_id = item.product.category_id or "Uncategorized"
                     category_sales[cat_id] = round(category_sales.get(cat_id, 0.0) + item.subtotal(), 2)
 
@@ -219,12 +225,11 @@ class Manager:
             out_of_stock = [p for p in self.products if p.stock_quantity == 0]
             low_stock    = [p for p in self.products if 0 < p.stock_quantity <= 5]
             
-            # KPI 3: Compile inventory turnover statistics (Units Sold vs. Average Inventory)
+            # Turnover statistics for this specific period
             current_total_stock = sum(p.stock_quantity for p in self.products)
             avg_inventory = current_total_stock + (total_units_sold / 2.0)
             global_turnover_ratio = round(total_units_sold / avg_inventory, 2) if avg_inventory > 0 else 0.0
             
-            # Product level stock velocities
             turnover_details = []
             for p in self.products:
                 p_sold = product_sales.get(p.name, 0)
@@ -252,20 +257,19 @@ class Manager:
             
         elif report_type == "orders":
             status_map = {}
-            for o in self.orders:
+            for o in period_orders:
                 status_map[o.status] = status_map.get(o.status, 0) + 1
             data = {
-                "total_orders": len(self.orders),
+                "total_orders": len(period_orders),
                 "by_status": status_map,
-                "orders": [o.to_dict() for o in self.orders],
+                "orders": [o.to_dict() for o in period_orders],
             }
             
         elif report_type == "sales":
-            invoices = [o.invoice for o in self.orders if o.invoice]
+            invoices = [o.invoice for o in period_orders if o.invoice]
             total_revenue = round(sum(inv.amount for inv in invoices if inv.is_paid), 2)
-            paid_orders   = [o for o in self.orders if o.is_paid()]
+            paid_orders   = [o for o in period_orders if o.is_paid()]
             
-            # KPI 1: Calculates top-selling and low-performing products
             sorted_sales = sorted(product_sales.items(), key=lambda x: x[1], reverse=True)
             top_selling = [{"name": name, "qty_sold": qty} for name, qty in sorted_sales[:3]]
             low_performing = [{"name": name, "qty_sold": qty} for name, qty in sorted_sales[-3:]][::-1]
@@ -277,12 +281,12 @@ class Manager:
                 "average_order_value": round(total_revenue / len(paid_orders) if paid_orders else 0, 2),
                 "top_selling": top_selling,
                 "low_performing": low_performing,
-                "category_sales": category_sales,  # KPI 2: Category sales breakdown
+                "category_sales": category_sales,
                 "invoice_details": [inv.to_dict() for inv in invoices],
             }
             
         elif report_type == "feedback":
-            feedbacks = [o.feedback for o in self.orders if o.feedback]
+            feedbacks = [o.feedback for o in period_orders if o.feedback]
             avg_rating = round(sum(f.rating for f in feedbacks) / len(feedbacks) if feedbacks else 0, 2)
             data = {
                 "total_feedback": len(feedbacks),
@@ -297,7 +301,7 @@ class Manager:
             
         elif report_type == "support":
             all_tickets = []
-            for o in self.orders:
+            for o in period_orders:
                 all_tickets.extend(o.support_tickets)
             resolved = [t for t in all_tickets if t.status == "resolved"]
             data = {
@@ -308,7 +312,7 @@ class Manager:
                 "resolution_rate": round(len(resolved) / len(all_tickets) * 100 if all_tickets else 0, 1),
             }
             
-        r = Report(str(uuid.uuid4()), report_type, datetime.now(), data, requested_by)
+        r = Report(str(uuid.uuid4()), report_type, datetime.now(), data, requested_by, s_date, e_date)
         self.reports.append(r)
         return r
     
@@ -335,17 +339,20 @@ class Manager:
 # ---------------------------------------------------------------------------
 
 class Report:
-    def __init__(self, report_id, report_type, generated_at, data, requested_by=None):
+    def __init__(self, report_id, report_type, generated_at, data, requested_by=None, start_date=None, end_date=None):
         self.report_id = report_id
         self.report_type = report_type
         self.generated_at = generated_at
         self.data = data
         self.requested_by = requested_by
+        self.start_date = start_date or datetime(2000, 1, 1)
+        self.end_date = end_date or datetime.now()
 
     def to_dict(self):
         return {"report_id": self.report_id, "report_type": self.report_type,
                 "generated_at": self.generated_at.isoformat(), "data": self.data,
-                "requested_by": self.requested_by.username if self.requested_by else None}
+                "requested_by": self.requested_by.username if self.requested_by else None,
+                "start_date": self.start_date.isoformat(), "end_date": self.end_date.isoformat(),}
 
     def __repr__(self): return f"<Report {self.report_id}: {self.report_type}>"
 
@@ -570,7 +577,7 @@ class Order:
         return sum(p.amount for p in self.payments if p.status == "completed") >= self.total_amount
 
     def add_shipment(self, s: Shipment):
-        self.shipments.append(s); self.update_status("shipped")
+        self.shipments.append(s)
 
     def receive_feedback(self, rating, comment) -> Feedback:
         self.feedback = Feedback(str(uuid.uuid4()), self, self.customer, rating, comment)

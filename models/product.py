@@ -18,7 +18,7 @@ class Product:
         self.stock_quantity = stock_quantity
         self.category_id = category_id
         self.image_url: str = ""
-        self.is_active: bool = True  # Default to active
+        self.is_active: bool = True  # Initialize default state
 
     def is_available(self) -> bool:
         return self.stock_quantity > 0
@@ -55,6 +55,7 @@ class Product:
             "category_id": self.category_id,
             "is_available": self.is_available(),
             "image_url": self.image_url,
+            "is_active": self.is_active,
         }
 
     def __repr__(self):

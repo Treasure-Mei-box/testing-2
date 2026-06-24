@@ -72,6 +72,7 @@ class Customer(Account):
             "phone": self.phone,
             "address": self.address,
             "addresses": self.addresses, 
+            "notifications": self.notifications,
             "order_count": len(self.orders),
             "ticket_count": len(self.support_tickets),
         })
