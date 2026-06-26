@@ -63,7 +63,9 @@ class Order:
 
     def add_shipment(self, shipment: Shipment):
         self.shipments.append(shipment)
-        
+    
+    def add_support_ticket(self, ticket: SupportTicket):
+        self.support_tickets.append(ticket)    
 
     def receive_feedback(self, rating: int, comment: str) -> Feedback:
         from .feedback import Feedback

@@ -1181,7 +1181,7 @@ def api_password_reset():
         return jsonify({"success": False, "error": "Current password is incorrect"}), 401
         
     # Set new password
-    user.password_hash = hash_password(new_pw)
+    user.change_password(hash_password(new_pw))
     return jsonify({"success": True, "message": "Password updated successfully!"})
 
 @app.route("/api/customer/addresses/delete", methods=["POST"])

@@ -26,6 +26,9 @@ class Account:
     def update_email(self, new_email: str):
         self.email = new_email
 
+    def change_password(self, new_password_hash: str):
+        self.password_hash = new_password_hash
+
     def to_dict(self) -> dict:
         return {
             "account_id": self.account_id,

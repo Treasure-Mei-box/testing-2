@@ -36,6 +36,9 @@ class Account:
     def activate(self):   self.is_active = True
     def update_email(self, e: str): self.email = e
 
+    def change_password(self, new_password_hash: str):
+        self.password_hash = new_password_hash
+
     def to_dict(self):
         return {"account_id": self.account_id, "username": self.username,
                 "email": self.email, "created_at": self.created_at.isoformat(),
@@ -578,6 +581,9 @@ class Order:
 
     def add_shipment(self, s: Shipment):
         self.shipments.append(s)
+
+    def add_support_ticket(self, ticket: SupportTicket):
+        self.support_tickets.append(ticket)
 
     def receive_feedback(self, rating, comment) -> Feedback:
         self.feedback = Feedback(str(uuid.uuid4()), self, self.customer, rating, comment)
