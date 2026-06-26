@@ -355,7 +355,7 @@ def seed_data():
     mgr = Manager.get_instance()
 
     customer = AccountFactory.create(
-        "customer", "Alex Kim", "alex@acemart.com", "pw123",
+        "customer", "Alex Kim", "alex@acemart.com", "pw1234",
         phone="555-0101", address="42 Crunch Lane"
     )
     # Seed multiple sample addresses
@@ -557,6 +557,7 @@ def payment_page():
     if not cart.items:
         return redirect(url_for("cart_page"))
     return render_template("payment.html", cart=cart, customer=customer)
+
 @app.route("/orders")
 @login_required_customer
 def orders_page():
