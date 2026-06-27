@@ -374,6 +374,7 @@ class Product:
         self.stock_quantity = stock_quantity
         self.category_id = category_id
         self.image_url = ""
+        self.is_active = True 
 
     def is_available(self): return self.stock_quantity > 0
 
@@ -415,6 +416,7 @@ class Category:
         self.name = name
         self.description = description
         self.products: List[Product] = []
+        self.is_active = True 
 
     def add_product(self, p: Product):
         p.category_id = self.category_id

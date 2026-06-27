@@ -85,6 +85,8 @@ Software-Architecture-Assignment-3/
     *The terminal will display the local development address (typically `http://127.0.0.1:5000`). Access this URL in your browser.*
     *Upon startup, the system automatically checks for the existence of `acemart.db`. If missing, the database is created, schema initialized, and standard seed profiles are generated. On subsequent runs, state is reloaded from the database automatically.*
 
+    * **💡 Developer Tip (System Reset):** If you want to reset the store back to its original, fresh seeded state (original stock levels, default credentials, and empty order histories) at any point during your testing, simply delete the `acemart.db` file from your project root and restart the server. The application will automatically detect the missing database, recreate the SQL schema, and re-seed the default state instantly.
+
 3.  **Run the Standalone Domain Demo**:
     To run a terminal-only demonstration of the domain class interactions without launching the Flask server:
     ```bash
