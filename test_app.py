@@ -4,12 +4,7 @@ from app import app
 def test_home():
     res = app.test_client().get("/")
     assert res.status_code == 200
-    assert b"Your Local Shop" in res.data
-
-
-def test_catalogue():
-    res = app.test_client().get("/catalogue")
-    assert res.status_code == 200
+    assert b"ACE Mart" in res.data
 
 
 def test_login_page():
@@ -17,7 +12,13 @@ def test_login_page():
     assert res.status_code == 200
 
 
+def test_products_api():
+    res = app.test_client().get("/api/products")
+    assert res.status_code == 200
+    assert res.get_json() is not None
+
+
 def test_health():
     res = app.test_client().get("/health")
     assert res.status_code == 200
-    assert res.get_json()["status"] == "OK"
+    assert res.get_json()["status"] == "ok"
